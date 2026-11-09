@@ -10,3 +10,7 @@ BETTER_AUTH_SECRET=
 # Optional: a GitHub OAuth app with callback http://localhost:3120/api/auth/callback/github
 # GITHUB_CLIENT_ID=
 # GITHUB_CLIENT_SECRET=
+# Guest chat locally: Cloudflare's always-pass Turnstile test keys (the real
+# site key only works on wren.n8builds.dev).
+TURNSTILE_SITE_KEY=1x00000000000000000000AA
+TURNSTILE_SECRET_KEY=1x0000000000000000000000000000000AA
