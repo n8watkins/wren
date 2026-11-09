@@ -5,9 +5,13 @@ import type { ExplainerId } from '../explainers'
 import { Icon } from '../Icons'
 
 /**
- * In-context tips: one at a time, pointing at a control on screen (an element
- * with a matching data-tip attribute). Each has one sentence, a close button
- * and "How this works". Closed tips stay closed (the parent stores them).
+ * The tips tour: a short guided sequence, one tip at a time, each pointing at
+ * a control on screen (an element with a matching data-tip attribute). A tip
+ * has one sentence, "How this works", a step count, "Skip tips" and Next (Done
+ * on the last). X, Esc and "Skip tips" end the whole tour; Enter and the Right
+ * arrow go to the next tip. Controls that aren't on screen (a phone has no
+ * sidebar) are left out of the count. The "?" dialog's "Show me around"
+ * starts it again.
  */
 const TIPS: { id: string; explainer: ExplainerId; text: string; side: 'above' | 'right' }[] = [
   { id: 'mic', explainer: 'mic', text: 'The mic is for talking instead of typing. Voice arrives in the next update.', side: 'above' },
@@ -55,27 +59,45 @@ function position(tip: (typeof TIPS)[number], ring: HTMLElement, coach: HTMLElem
   coach.style.setProperty('--ax', `${Math.min(Math.max(12, centre - left - 6), WIDTH - 24)}px`)
 }
 
+function isEditable(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) return false
+  return target.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName)
+}
+
 export function Tips({
   active,
-  dismissed,
-  onDismiss,
+  step,
+  onStep,
+  onClose,
   onExplain,
 }: {
   active: boolean
-  dismissed: string[]
-  onDismiss: (id: string) => void
+  /** Index into the tips on screen. */
+  step: number
+  onStep: (step: number) => void
+  /** Ends the whole tour. */
+  onClose: () => void
   onExplain: (id: ExplainerId) => void
 }) {
   const ring = useRef<HTMLSpanElement>(null)
   const coach = useRef<HTMLDivElement>(null)
+  const next = useRef<HTMLButtonElement>(null)
   const [, setTick] = useState(0)
 
   const onScreen = active ? TIPS.filter((tip) => visibleTarget(tip.id) !== null) : []
-  const current = onScreen.find((tip) => !dismissed.includes(tip.id)) ?? null
+  const current = onScreen[step] ?? null
+  const last = step >= onScreen.length - 1
+  const advance = () => (last ? onClose() : onStep(step + 1))
 
   useLayoutEffect(() => {
     if (current && ring.current && coach.current) position(current, ring.current, coach.current)
   })
+
+  // Each new tip takes the focus, so Enter, Space and Tab act on it.
+  const currentId = current?.id
+  useEffect(() => {
+    if (currentId) next.current?.focus({ preventScroll: true })
+  }, [currentId])
 
   // Layout can change under the tip (resizing, scrolling, the thread growing).
   useEffect(() => {
@@ -91,8 +113,29 @@ export function Tips({
     }
   }, [active])
 
+  // Keys: Enter or Right for Next, Esc to end the tour. Typing in a field is left alone.
+  useEffect(() => {
+    if (!current) return
+    const onKey = (event: KeyboardEvent) => {
+      if (event.defaultPrevented || event.altKey || event.ctrlKey || event.metaKey) return
+      if (event.key === 'Escape') {
+        event.preventDefault()
+        onClose()
+        return
+      }
+      if (isEditable(event.target)) return
+      // A focused button inside the tip handles its own Enter.
+      if (event.key === 'Enter' && event.target instanceof HTMLButtonElement && coach.current?.contains(event.target)) return
+      if (event.key === 'Enter' || event.key === 'ArrowRight') {
+        event.preventDefault()
+        advance()
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  })
+
   if (!current) return null
-  const index = onScreen.indexOf(current) + 1
   return (
     <>
       <span ref={ring} className="ring" aria-hidden="true" />
@@ -100,23 +143,32 @@ export function Tips({
         ref={coach}
         className={current.side === 'right' ? 'coach left' : 'coach down'}
         role="dialog"
-        aria-label="Tip"
+        aria-label={`Tip ${step + 1} of ${onScreen.length}`}
         data-testid="tip"
         data-tip-id={current.id}
       >
         <div className="ct">
           <p>{current.text}</p>
-          <button type="button" className="cx" aria-label="Close tip" onClick={() => onDismiss(current.id)}>
+          <button type="button" className="cx" aria-label="Close tips" onClick={onClose}>
             <Icon name="x" />
           </button>
         </div>
         <div className="cf">
-          <button type="button" onClick={() => onExplain(current.explainer)}>
+          <button type="button" className="hw" onClick={() => onExplain(current.explainer)}>
             How this works
           </button>
-          <span className="of">
-            {index} of {onScreen.length}
+          <span className="of" data-testid="tip-step">
+            {step + 1} of {onScreen.length}
           </span>
+        </div>
+        <div className="ca">
+          <button type="button" className="skip" onClick={onClose}>
+            Skip tips
+          </button>
+          <button type="button" className="next" ref={next} onClick={advance} data-testid="tip-next">
+            {last ? 'Done' : 'Next'}
+            {!last && <Icon name="right" />}
+          </button>
         </div>
       </div>
     </>

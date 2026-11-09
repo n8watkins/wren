@@ -13,6 +13,7 @@ Read this before changing product, design or workflow, and add every new decisio
 - **Look**: warm paper and ink, with ember for voice and primary actions, saffron for research and sage for memory, from the approved mockups (owner, "go for it", 2026-11-09).
   Fonts: Bricolage Grotesque (display), Inter (interface), Newsreader (long reading), JetBrains Mono (labels and numbers), self-hosted through `next/font`.
 - **No landing page**: the app is the first screen, with a "How Wren works" modal on the first visit that "?" reopens, and in-context tips.
+- **Tips are a short guided tour** (owner, 2026-11-09): each tip has Next (Done on the last), a step count and "Skip tips"; X, Esc and "Skip tips" end the whole tour, Enter and the Right arrow go on, and "Show me around" in the "?" dialog starts it again.
 - **Phases**: 1 foundation and chat (this), 2 voice, 3 research, 4 memory, then launch.
   Controls for later phases are visible now and say "coming in the next update"; none of them pretend to work.
 
