@@ -46,7 +46,7 @@
   "vars": {
     "APP_ENV": "production",
     // The site's public address: sign-in callbacks and links in emails.
-    "PUBLIC_URL": "https://wren.nathancwatkins23.workers.dev",
+    "PUBLIC_URL": "https://wren.n8builds.dev",
     "GEMINI_MODEL": "gemini-3.8-flash",
     "EMAIL_FROM": "wren@n8builds.dev",
     // "cloudflare" sends real email; "outbox" (local and test runs only) keeps
@@ -64,6 +64,10 @@
   // until the owner sets them.
   "secrets": { "required": ["BETTER_AUTH_SECRET"] },
   "observability": { "enabled": true, "head_sampling_rate": 1 },
+  // wren.n8builds.dev as a Workers custom domain: Cloudflare creates and
+  // manages its DNS record and certificate. The workers.dev address stays on
+  // and forwards to it (worker/index.ts).
+  "routes": [{ "pattern": "wren.n8builds.dev", "custom_domain": true }],
   "workers_dev": true,
   "preview_urls": false
 }

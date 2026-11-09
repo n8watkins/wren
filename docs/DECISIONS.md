@@ -32,11 +32,14 @@ Read this before changing product, design or workflow, and add every new decisio
   Protection: a Cloudflare Turnstile check (managed, interaction-only) before a guest's first message; a signed, HttpOnly guest cookie (HMAC over a random id and its expiry); limits keyed on the cookie and on CF-Connecting-IP (15 guest messages per network a day, so many cookies can't multiply it); and a site-wide cap of 500 guest messages a day (`GUEST_SITE_DAILY_CAP`) in a Durable Object counter, past which guests are told "Guest messages are used up for today; sign in to keep going".
   Turnstile tokens are checked server-side in Wren's own Worker (siteverify), so no separate verify Worker is needed.
   The widget "Wren guest chat" (managed, wren.n8builds.dev) was created through the API; its secret is a Worker secret and was never written to disk.
-- **Sign-in emails** go through Cloudflare Email Service from `wren@n8builds.dev`, the domain already onboarded for sending (no API key).
-  The owner may prefer another sender once Wren has its own domain.
+- **Sign-in emails** go through Cloudflare Email Service from `wren@n8builds.dev` (owner confirmed, 2026-11-09), the domain already onboarded for sending (no API key).
   Links expire after 10 minutes, work once, and are stored hashed.
 
 ## Architecture
+
+- **Address: `wren.n8builds.dev`** (owner, 2026-11-09), a Workers custom domain on the n8builds.dev zone.
+  It is `PUBLIC_URL`, so Better Auth's base URL, trusted origin and email links use it.
+  The `workers.dev` address stays on and forwards there with a 308, keeping the path (`lib/security/canonical.ts`).
 
 - **Next.js 16 App Router on Cloudflare Workers through OpenNext**, the stack of the owner's other sites, Turbopack everywhere.
 - **One Durable Object agent per signed-in person** (Cloudflare Agents SDK, `agent/wren-agent.ts`), named by the verified user id.
