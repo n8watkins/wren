@@ -1,0 +1,13 @@
+{
+  "versionFiles": [],
+  "workflows": "package",
+  "train": {
+    "schedule": "0 16 * * 1",
+    "checks": [
+      "ci.yml",
+      "commits.yml"
+    ]
+  },
+  "repository": "n8watkins/wren",
+  "visibility": "private"
+}
