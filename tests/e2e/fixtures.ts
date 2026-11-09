@@ -15,6 +15,19 @@ export const test = base.extend({
   extraHTTPHeaders: async ({}, provide) => {
     await provide({ 'cf-connecting-ip': randomIp() })
   },
+  // The header is for Wren only: on a third-party request (Turnstile's script)
+  // Chromium's opaque-response blocking rejects a script fetched with it.
+  context: async ({ context, baseURL }, provide) => {
+    await context.route(
+      (url) => !url.href.startsWith(baseURL ?? ''),
+      (route) => {
+        const headers = { ...route.request().headers() }
+        delete headers['cf-connecting-ip']
+        return route.continue({ headers })
+      }
+    )
+    await provide(context)
+  },
 })
 
 export { expect } from '@playwright/test'

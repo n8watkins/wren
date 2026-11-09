@@ -40,6 +40,8 @@ interface ChromeProps {
   person: Person | null
   usage: UsageSnapshot
   ownKey: boolean
+  /** A guest with guest chat on: the meter shows the guest allowance and what signing in unlocks. */
+  guest: boolean
   theme: Theme
   setTheme: (t: Theme) => void
   onNewChat: () => void
@@ -158,7 +160,7 @@ export function Sidebar(props: ChromeProps) {
         </>
       )}
       <div className="grow" />
-      <Meter usage={props.usage} ownKey={props.ownKey} onKey={props.onKey} />
+      <Meter usage={props.usage} ownKey={props.ownKey} guest={props.guest} onKey={props.onKey} onSignIn={props.onSignIn} />
       <Who person={person} onSignIn={props.onSignIn} />
       <div className="acct">
         <ThemeSwitch theme={props.theme} setTheme={props.setTheme} />
@@ -214,7 +216,7 @@ export function MobileHeader(
             {props.chats.length === 0 ? <div className="empty">Your chats will show up here.</div> : <RecentList {...props} />}
           </>
         )}
-        <Meter usage={props.usage} ownKey={props.ownKey} onKey={props.onKey} />
+        <Meter usage={props.usage} ownKey={props.ownKey} guest={props.guest} onKey={props.onKey} onSignIn={props.onSignIn} />
         <Who person={props.person} onSignIn={props.onSignIn} />
         <div className="row">
           <button type="button" className="btn" onClick={props.onKey}>

@@ -22,9 +22,13 @@ const routePath = (file: string) =>
   '/' + relative(join(ROOT, 'app'), file).replace(/\/route\.tsx?$/, '').replace(/\([^)]+\)\//g, '')
 
 /** Every route, and who may call it. A new route fails this test until it is listed. */
-const ROUTES: Record<string, 'public' | 'session'> = {
+const ROUTES: Record<string, 'public' | 'session' | 'guest'> = {
   '/api/auth/[...all]': 'public',
   '/api/health': 'public',
+  // Public, but it only answers a valid Turnstile token with a guest cookie.
+  '/api/guest/start': 'public',
+  '/api/guest/chat': 'guest',
+  '/api/guest/usage': 'guest',
   '/api/chat': 'session',
   '/api/chat/stop': 'session',
   '/api/chats': 'session',
@@ -37,14 +41,24 @@ describe('API routes', () => {
     expect(routes.map(routePath).sort()).toEqual(Object.keys(ROUTES).sort())
   })
 
-  it.each(routes.map((f) => [routePath(f), f]))('%s checks the session when it must', (path, file) => {
+  it.each(routes.map((f) => [routePath(f), f]))('%s checks the session or guest cookie when it must', (path, file) => {
     const source = readFileSync(file, 'utf8')
-    if (ROUTES[path] !== 'session') return
+    const kind = ROUTES[path]
+    if (kind === 'public') return
+    const wrapper = kind === 'session' ? 'authed' : 'guestOnly'
     const handlers = source.match(/export const (GET|POST|PUT|PATCH|DELETE)\b/g) ?? []
-    const wrapped = source.match(/export const (GET|POST|PUT|PATCH|DELETE)(<[^>]*>)?\s*=\s*authed(<[^>]*>)?\(/g) ?? []
+    const wrapped = source.match(new RegExp(`export const (GET|POST|PUT|PATCH|DELETE)(<[^>]*>)?\\s*=\\s*${wrapper}(<[^>]*>)?\\(`, 'g')) ?? []
     expect(handlers.length).toBeGreaterThan(0)
     expect(wrapped.length).toBe(handlers.length)
     expect(source).not.toMatch(/export (async )?function (GET|POST|PUT|PATCH|DELETE)/)
+  })
+
+  it('guest routes never read the session, and session routes never read the guest cookie', () => {
+    for (const file of routes) {
+      const source = readFileSync(file, 'utf8')
+      if (ROUTES[routePath(file)] === 'guest') expect(source).not.toMatch(/getVerifiedSession|agentFor\(/)
+      if (ROUTES[routePath(file)] === 'session') expect(source).not.toMatch(/readGuest|guestAgentFor/)
+    }
   })
 
   it('include nothing that looks like a debug, admin, log or test route', () => {

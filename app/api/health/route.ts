@@ -2,6 +2,7 @@ import { getEnv, isProduction } from '@/lib/server/env'
 import { signInMethods } from '@/lib/server/auth'
 import { optionalSetting } from '@/lib/secrets'
 import { jsonResponse } from '@/lib/server/http'
+import { guestChatConfigured } from '@/lib/server/turnstile'
 
 /**
  * One check per feature, for OpenPing and for a person reading it. It says
@@ -27,7 +28,11 @@ export async function GET(): Promise<Response> {
 
   const database = await timed(() => env.DB.prepare('SELECT 1 AS ok').first<{ ok: number }>())
   const agents = await timed(() => env.DAILY_COUNTER.getByName('health').ping())
-  const testHooks = env.EMAIL_TRANSPORT === 'outbox' || optionalSetting(env, 'GEMINI_BASE_URL') !== undefined
+  const testHooks =
+    env.EMAIL_TRANSPORT === 'outbox' ||
+    optionalSetting(env, 'GEMINI_BASE_URL') !== undefined ||
+    optionalSetting(env, 'TURNSTILE_VERIFY_URL') !== undefined
+  const guests = guestChatConfigured(env)
   const demoKey = optionalSetting(env, 'GEMINI_API_KEY') !== undefined
   const methods = signInMethods(env)
 
@@ -41,6 +46,10 @@ export async function GET(): Promise<Response> {
     chat: {
       ok: demoKey,
       detail: demoKey ? `${env.GEMINI_MODEL} on the demo key` : 'no demo key yet: chat works with your own Gemini key',
+    },
+    guestChat: {
+      ok: guests,
+      detail: guests ? `guests get 5 messages a day, ${env.GUEST_SITE_DAILY_CAP} site-wide` : 'Turnstile keys not set: guests must sign in',
     },
     signInEmail: { ok: methods.email, detail: `sign-in links by ${env.EMAIL_TRANSPORT === 'outbox' ? 'local outbox' : 'Cloudflare Email Service'}` },
     signInGithub: { ok: methods.github, detail: methods.github ? 'GitHub sign-in is set up' : 'GitHub OAuth app not set up yet' },

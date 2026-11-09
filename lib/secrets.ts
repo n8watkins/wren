@@ -7,6 +7,10 @@ export type OptionalSetting =
   | 'GEMINI_API_KEY'
   | 'GITHUB_CLIENT_ID'
   | 'GITHUB_CLIENT_SECRET'
+  /** Turnstile's secret for the guest human check. Without it, guest chat is off. */
+  | 'TURNSTILE_SECRET_KEY'
+  /** Test runs only: a local stand-in for Turnstile's siteverify. /api/health fails if a production deploy has it. */
+  | 'TURNSTILE_VERIFY_URL'
   /** Test runs only: the local mock of the Gemini API. /api/health fails if a production deploy has it. */
   | 'GEMINI_BASE_URL'
 

@@ -1,6 +1,6 @@
 import 'server-only'
 import { z } from 'zod'
-import { SIZE_LIMITS } from '../limits'
+import { GUEST_LIMITS, SIZE_LIMITS } from '../limits'
 
 /**
  * Request schemas. Every object is strict: an unknown field (a userId, a
@@ -23,6 +23,20 @@ export const chatRequest = z
   })
 
 export const stopRequest = z.strictObject({ chatId })
+
+/** A Turnstile token, to start a guest session. */
+export const guestStart = z.strictObject({ token: z.string().min(1).max(2048) })
+
+/**
+ * A guest's message with their earlier turns (the chat lives in their tab).
+ * Roles are only user and model; the system prompt stays on the server.
+ */
+export const guestChat = z.strictObject({
+  text: z.string().trim().min(1).max(SIZE_LIMITS.messageChars),
+  history: z
+    .array(z.strictObject({ role: z.enum(['user', 'model']), text: z.string().max(SIZE_LIMITS.messageChars) }))
+    .max(GUEST_LIMITS.historyTurns),
+})
 
 /**
  * A person's own Gemini key, sent per request in the X-Gemini-Key header.

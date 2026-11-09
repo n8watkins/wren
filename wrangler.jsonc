@@ -52,7 +52,11 @@
     // "cloudflare" sends real email; "outbox" (local and test runs only) keeps
     // sign-in links in D1 for scripts/magic-link.mjs. /api/health fails if a
     // production deploy ever has "outbox".
-    "EMAIL_TRANSPORT": "cloudflare"
+    "EMAIL_TRANSPORT": "cloudflare",
+    // Guest chat's human check (Turnstile, public site key) and the site-wide
+    // cap on guest messages a day (lib/limits.ts GUEST_LIMITS).
+    "TURNSTILE_SITE_KEY": "0x4AAAAAAF6JpSY2Xh6ynpPk",
+    "GUEST_SITE_DAILY_CAP": "500"
   },
   // Secrets (wrangler secret put, docs/DEPLOY.md). BETTER_AUTH_SECRET is
   // required; GEMINI_API_KEY, GITHUB_CLIENT_ID and GITHUB_CLIENT_SECRET are

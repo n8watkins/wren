@@ -15,6 +15,7 @@ export function Composer({
   busy,
   error,
   onDismissError,
+  onSignIn,
   onSend,
   onStop,
   onExplain,
@@ -23,8 +24,9 @@ export function Composer({
   draft: string
   setDraft: (value: string) => void
   busy: boolean
-  error: string | null
+  error: { message: string; signIn: boolean } | null
   onDismissError: () => void
+  onSignIn: () => void
   onSend: () => void
   onStop: () => void
   onExplain: (id: 'mic' | 'research' | 'memory') => void
@@ -58,8 +60,13 @@ export function Composer({
   const alert = error ? (
     <div className="alert" role="alert" data-testid="chat-error">
       <Icon name="alert" />
-      <p>{error}</p>
-      <button type="button" onClick={onDismissError} aria-label="Dismiss">
+      <p>{error.message}</p>
+      {error.signIn && (
+        <button type="button" className="btn pri" onClick={onSignIn} data-testid="error-sign-in">
+          Sign in
+        </button>
+      )}
+      <button type="button" className="dismiss" onClick={onDismissError} aria-label="Dismiss">
         <Icon name="x" />
       </button>
     </div>

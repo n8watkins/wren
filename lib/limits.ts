@@ -12,6 +12,22 @@ export const DAILY_LIMITS = {
 } as const
 
 /**
+ * Guests (no account, owner decision 2026-11-09): typed chat only, a few
+ * messages a day, nothing saved past the tab. Per guest cookie, per client IP
+ * (so many cookies from one network can't multiply it), and a site-wide cap
+ * (GUEST_SITE_DAILY_CAP in wrangler.jsonc, default below).
+ */
+export const GUEST_LIMITS = {
+  chat: 5,
+  perIp: 15,
+  siteDaily: 500,
+  /** Earlier turns a guest's browser may send with a message. */
+  historyTurns: 24,
+  /** How long a guest cookie lasts. */
+  cookieSeconds: 60 * 60 * 24,
+} as const
+
+/**
  * Daily allowance per client IP on the demo key, so one person with several
  * email addresses can't multiply their share.
  */

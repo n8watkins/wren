@@ -9,6 +9,9 @@
  * nothing the model writes is ever rendered as HTML (components/chat/Markdown.tsx).
  */
 
+/** Cloudflare Turnstile, the human check before a guest's first message. */
+const TURNSTILE = 'https://challenges.cloudflare.com'
+
 export interface CspOptions {
   nonce: string
   /** `next dev` needs eval for React's debugging and a websocket for HMR. */
@@ -20,7 +23,8 @@ export interface CspOptions {
 export function buildContentSecurityPolicy({ nonce, dev = false, https = false }: CspOptions): string {
   const directives: Record<string, string[]> = {
     'default-src': ["'self'"],
-    'script-src': ["'self'", `'nonce-${nonce}'`, "'strict-dynamic'", ...(dev ? ["'unsafe-eval'"] : [])],
+    // 'strict-dynamic' lets our nonced scripts load Turnstile's; the host is the fallback for older browsers.
+    'script-src': ["'self'", `'nonce-${nonce}'`, "'strict-dynamic'", TURNSTILE, ...(dev ? ["'unsafe-eval'"] : [])],
     'style-src': ["'self'", "'unsafe-inline'"],
     // Avatars are initials, model output may not load images, so no remote hosts.
     'img-src': ["'self'", 'data:', 'blob:'],
@@ -32,7 +36,7 @@ export function buildContentSecurityPolicy({ nonce, dev = false, https = false }
     'object-src': ["'none'"],
     'base-uri': ["'none'"],
     'form-action': ["'self'"],
-    'frame-src': ["'none'"],
+    'frame-src': [TURNSTILE],
     'frame-ancestors': ["'none'"],
   }
   const policy = Object.entries(directives).map(([name, values]) => `${name} ${values.join(' ')}`)

@@ -32,11 +32,11 @@ test('the guest shell matches the layout for this width', async ({ page }) => {
     await expect(page.getByTestId('usage-ring')).toBeVisible()
     await page.getByTestId('title-menu').click()
     await expect(page.getByTestId('phone-menu')).toBeVisible()
-    await expect(page.getByTestId('phone-menu').getByTestId('meter-chat')).toHaveText('0/50')
+    await expect(page.getByTestId('phone-menu').getByTestId('meter-chat')).toHaveText('0/5')
   } else {
     await expect(page.locator('.side')).toBeVisible()
     await expect(page.locator('.mnav')).toBeHidden()
-    await expect(page.locator('.side').getByTestId('meter-chat')).toHaveText('0/50')
+    await expect(page.locator('.side').getByTestId('meter-chat')).toHaveText('0/5')
     await expect(page.locator('.side').getByTestId('open-sign-in')).toBeVisible()
   }
   await noHorizontalScroll(page)

@@ -25,9 +25,13 @@ Read this before changing product, design or workflow, and add every new decisio
   Sessions are rows in D1 behind a signed cookie and are checked on the server for every API call.
   Alternatives considered: Auth.js (its D1 adapter and Workers story are weaker and its magic link needs a separate email provider adapter), Lucia (deprecated as a library in 2025), a hand-rolled OAuth and token flow (more code to get wrong for no gain).
   Better Auth's in-memory rate limiter is off, because Workers don't share memory; the auth route applies durable limits instead.
-- **Guests can look around but must sign in to chat** (2026-11-09).
-  A guest quota would need an anonymous identity, and the only one a visitor can't reset is the IP address, which many people share; that is not trivially safe, so the first message opens the sign-in modal.
-  The mockups' "No account is needed to try it" line was changed to match.
+- **Two tiers: guest and signed in** (owner, 2026-11-09; replaces the earlier "guests must sign in").
+  A guest (no account) gets typed chat only, 5 messages a day, and nothing is saved past the tab: the chat lives in the tab's sessionStorage and comes with each message, size-capped, and the server stores only the counts.
+  Signed in: 50 messages, 10 voice minutes and 3 research runs a day, with chats saved.
+  The UI says what signing in unlocks: "Sign in for 10x more messages, voice, research and memory".
+  Protection: a Cloudflare Turnstile check (managed, interaction-only) before a guest's first message; a signed, HttpOnly guest cookie (HMAC over a random id and its expiry); limits keyed on the cookie and on CF-Connecting-IP (15 guest messages per network a day, so many cookies can't multiply it); and a site-wide cap of 500 guest messages a day (`GUEST_SITE_DAILY_CAP`) in a Durable Object counter, past which guests are told "Guest messages are used up for today; sign in to keep going".
+  Turnstile tokens are checked server-side in Wren's own Worker (siteverify), so no separate verify Worker is needed.
+  The widget "Wren guest chat" (managed, wren.n8builds.dev) was created through the API; its secret is a Worker secret and was never written to disk.
 - **Sign-in emails** go through Cloudflare Email Service from `wren@n8builds.dev` (owner confirmed, 2026-11-09), the domain already onboarded for sending (no API key).
   Links expire after 10 minutes, work once, and are stored hashed.
 
