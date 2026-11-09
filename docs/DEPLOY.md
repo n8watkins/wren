@@ -40,6 +40,7 @@ If the `workers.dev` address answers `error code: 1042` after a deploy (it did o
 ## Local
 
 - `npm run preview`: the production build on `http://localhost:3120` with local D1 and Durable Objects (copy `.dev.vars.example` to `.dev.vars` first).
+  It sets Cloudflare's always-pass Turnstile test keys for guest chat (the real site key only works on wren.n8builds.dev); optional secrets go in with `--var`, because `wrangler dev` loads only the `secrets.required` ones from `.dev.vars`.
   It passes `--local-upstream localhost:3120 --upstream-protocol http`, because with a custom domain in `routes` wrangler dev would otherwise present every request as `https://wren.n8builds.dev`, and sign-in would reject the origin.
   Sign-in links stay in a local outbox: `npm run magic-link` prints the newest.
 - `npm run dev`: `next dev` for UI work; chat needs the Workers runtime, so use `preview` for it.

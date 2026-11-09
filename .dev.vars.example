@@ -5,11 +5,11 @@ PUBLIC_URL=http://localhost:3120
 EMAIL_TRANSPORT=outbox
 # Any long random string: node -e "console.log(require('crypto').randomBytes(32).toString('base64url'))"
 BETTER_AUTH_SECRET=
-# Optional: the demo key. Without it, chat works with your own key ("Use your own key").
-# GEMINI_API_KEY=
-# Optional: a GitHub OAuth app with callback http://localhost:3120/api/auth/callback/github
-# GITHUB_CLIENT_ID=
-# GITHUB_CLIENT_SECRET=
+# Only secrets listed under "secrets.required" in wrangler.jsonc load from this
+# file, so optional ones (GEMINI_API_KEY, GITHUB_CLIENT_ID/SECRET) are passed
+# with --var instead: npm run preview -- --var GEMINI_API_KEY:<key>. Without a
+# demo key, chat works with your own key ("Use your own key"). Guest chat uses
+# Cloudflare's always-pass Turnstile test keys, set by npm run preview.
 # Guest chat locally: Cloudflare's always-pass Turnstile test keys (the real
 # site key only works on wren.n8builds.dev).
 TURNSTILE_SITE_KEY=1x00000000000000000000AA
