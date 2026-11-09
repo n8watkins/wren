@@ -13,6 +13,10 @@ export type OptionalSetting =
   | 'TURNSTILE_VERIFY_URL'
   /** Test runs only: the local mock of the Gemini API. /api/health fails if a production deploy has it. */
   | 'GEMINI_BASE_URL'
+  /** Research search (Tavily). Without it, research searches with Gemini's Google Search tool. */
+  | 'TAVILY_API_KEY'
+  /** Test runs only: the local mock of the Tavily API. /api/health fails if a production deploy has it. */
+  | 'TAVILY_BASE_URL'
 
 export function optionalSetting(env: object, name: OptionalSetting): string | undefined {
   const value = (env as Record<string, unknown>)[name]

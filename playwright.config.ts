@@ -2,12 +2,14 @@ import { defineConfig, devices } from '@playwright/test'
 
 /**
  * End-to-end tests against the real Worker build (OpenNext, D1, Durable
- * Objects) served by wrangler on port 3121 (scripts/e2e-server.mjs), with a
- * local mock of the Gemini API on 3127 (tests/mocks/gemini.mjs). Every spec
- * runs at desktop width and at phone width.
+ * Objects) served by wrangler on port 3121 (scripts/e2e-server.mjs), with local
+ * mocks of the Gemini API on 3127 (tests/mocks/gemini.mjs) and the Tavily API on
+ * 3128 (tests/mocks/tavily.mjs). Every spec runs at desktop width and at
+ * phone width.
  */
 const PORT = process.env.E2E_PORT ?? '3121'
 const MOCK = process.env.MOCK_GEMINI_PORT ?? '3127'
+const TAVILY = process.env.MOCK_TAVILY_PORT ?? '3128'
 // 127.0.0.2, not localhost: under WSL's mirrored networking a connection to a
 // closed port on 127.0.0.1 hangs for minutes instead of being refused, and
 // Playwright probes each server's port before starting it. 127.0.0.2 is plain
@@ -54,11 +56,17 @@ export default defineConfig({
       env: { MOCK_GEMINI_PORT: MOCK, E2E_HOST: HOST },
     },
     {
+      command: 'node tests/mocks/tavily.mjs',
+      url: `http://${HOST}:${TAVILY}/health`,
+      reuseExistingServer: false,
+      env: { MOCK_TAVILY_PORT: TAVILY, E2E_HOST: HOST },
+    },
+    {
       command: 'node scripts/e2e-server.mjs',
       url: `${BASE_URL}/api/health`,
       reuseExistingServer: false,
       timeout: 300_000,
-      env: { E2E_PORT: PORT, MOCK_GEMINI_PORT: MOCK, E2E_HOST: HOST },
+      env: { E2E_PORT: PORT, MOCK_GEMINI_PORT: MOCK, MOCK_TAVILY_PORT: TAVILY, E2E_HOST: HOST },
     },
   ],
 })

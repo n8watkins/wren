@@ -20,6 +20,7 @@ import { createMeterTable, giveBack, tryTake, used } from './meter'
 import type { ErrorCode } from '../lib/errors'
 import { DAILY_IP_LIMITS, DAILY_LIMITS, GUEST_LIMITS, nextUtcMidnight, utcDay, type UsageSnapshot } from '../lib/limits'
 import { optionalSetting } from '../lib/secrets'
+import { ResearchRuns } from './research'
 
 /** What the API route hands over after verifying the session and the body. */
 interface ChatTurnRequest {
@@ -236,6 +237,42 @@ export class WrenAgent extends Agent<Cloudflare.Env> {
       finish: () => undefined,
     })
     return { ok: true, stream }
+  }
+
+  /* ---------- research runs (agent/research.ts) ---------- */
+
+  private researchRuns?: ResearchRuns
+
+  private get research(): ResearchRuns {
+    this.researchRuns ??= new ResearchRuns(this.db, this.env, async (runId) => {
+      await this.schedule(0, 'researchTick', { runId })
+    })
+    return this.researchRuns
+  }
+
+  startResearch(question: string) {
+    return this.research.start(question)
+  }
+
+  listResearch() {
+    return this.research.list()
+  }
+
+  getResearch(id: string) {
+    return this.research.get(id)
+  }
+
+  watchResearch(id: string) {
+    return this.research.watch(id)
+  }
+
+  cancelResearch(id: string) {
+    return this.research.cancel(id)
+  }
+
+  /** One step of a run; scheduled, never called by a route. */
+  async researchTick(payload: { runId: string }): Promise<void> {
+    await this.research.tick(payload.runId)
   }
 
   guestUsage(): UsageSnapshot {
