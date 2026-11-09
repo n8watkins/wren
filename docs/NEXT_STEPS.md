@@ -22,4 +22,5 @@
 
 ## Done
 
-- Phase 1, foundation and chat: see the pull requests on the repo.
+- 2026-11-09: release-kit and CI checks (#1); phase 1, foundation and chat (#4).
+- 2026-11-09: preview deployed to https://wren.nathancwatkins23.workers.dev (D1 `wren` migrated, Durable Objects created, `BETTER_AUTH_SECRET` set). Email sign-in works there; chat needs a visitor's own key until the demo key is set.
