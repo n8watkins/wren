@@ -3,27 +3,68 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "next dev -p 3120",
     "build": "next build",
-    "start": "next start",
-    "lint": "eslint",
-    "release": "release-kit release",
-    "release:check": "release-kit check && npm run lint && npm run build",
+    "build:worker": "opennextjs-cloudflare build",
+    "preview": "opennextjs-cloudflare build && npm run db:migrate:local && wrangler dev --port 3120",
+    "deploy": "opennextjs-cloudflare build && opennextjs-cloudflare deploy",
+    "check:deploy": "wrangler deploy --dry-run",
+    "cf-typegen": "wrangler types --env-interface CloudflareEnv --strict-vars=false cloudflare-env.d.ts",
+    "check:cf-types": "wrangler types --env-interface CloudflareEnv --strict-vars=false --check cloudflare-env.d.ts",
+    "db:migrate": "wrangler d1 migrations apply wren --remote",
+    "db:migrate:local": "wrangler d1 migrations apply wren --local",
+    "magic-link": "node scripts/magic-link.mjs",
+    "lint": "eslint . --max-warnings 0",
+    "type-check": "next typegen && tsc --noEmit",
+    "knip": "knip",
+    "test": "npm run test:unit && npm run test:e2e",
+    "test:unit": "vitest run",
+    "test:e2e": "playwright test",
     "prepare": "git config core.hooksPath .githooks || true",
-    "type-check": "next typegen && tsc --noEmit"
+    "release": "release-kit release",
+    "release:check": "npm run lint && npm run type-check && npm run test:unit && npm run build:worker"
   },
   "dependencies": {
+    "@google/genai": "^3.0.0",
+    "@opennextjs/cloudflare": "1.20.16",
+    "agents": "^0.33.0",
+    "better-auth": "^1.7.18",
     "next": "16.4.5",
     "react": "19.3.0",
-    "react-dom": "19.3.0"
+    "react-dom": "19.3.0",
+    "react-markdown": "^10.1.0",
+    "rehype-sanitize": "^6.0.0",
+    "remark-gfm": "^4.0.1",
+    "server-only": "^0.0.1",
+    "zod": "^4.6.7"
   },
   "devDependencies": {
-    "@types/node": "^20",
+    "@playwright/test": "^1.65.0",
+    "@types/node": "^24.19.2",
     "@types/react": "^19",
     "@types/react-dom": "^19",
-    "eslint": "^9",
+    "eslint": "^10.14.0",
     "eslint-config-next": "16.4.5",
+    "knip": "^6.44.2",
     "release-kit": "github:n8watkins/release-kit#v2.8.1",
-    "typescript": "^5"
+    "typescript": "~6.0.3",
+    "vitest": "^5.1.0",
+    "wrangler": "^4.158.0"
+  },
+  "allowScripts": {
+    "esbuild": true,
+    "workerd": true,
+    "protobufjs": false,
+    "core-js-pure": false
+  },
+  "description": "Wren: an AI assistant you can type or talk to, that researches the web and remembers what you save.",
+  "author": "Nathan Watkins",
+  "license": "UNLICENSED",
+  "engines": {
+    "node": ">=24"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/n8watkins/wren.git"
   }
 }

@@ -1,0 +1,12 @@
+# Copy to .dev.vars for `npm run preview` (wrangler dev on port 3120).
+APP_ENV=development
+PUBLIC_URL=http://localhost:3120
+# Sign-in links stay in the local D1 outbox: `npm run magic-link` prints the latest.
+EMAIL_TRANSPORT=outbox
+# Any long random string: node -e "console.log(require('crypto').randomBytes(32).toString('base64url'))"
+BETTER_AUTH_SECRET=
+# Optional: the demo key. Without it, chat works with your own key ("Use your own key").
+# GEMINI_API_KEY=
+# Optional: a GitHub OAuth app with callback http://localhost:3120/api/auth/callback/github
+# GITHUB_CLIENT_ID=
+# GITHUB_CLIENT_SECRET=
