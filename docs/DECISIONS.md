@@ -28,11 +28,14 @@ Read this before changing product, design or workflow, and add every new decisio
 - **Guests can look around but must sign in to chat** (2026-11-09).
   A guest quota would need an anonymous identity, and the only one a visitor can't reset is the IP address, which many people share; that is not trivially safe, so the first message opens the sign-in modal.
   The mockups' "No account is needed to try it" line was changed to match.
-- **Sign-in emails** go through Cloudflare Email Service from `wren@n8builds.dev`, the domain already onboarded for sending (no API key).
-  The owner may prefer another sender once Wren has its own domain.
+- **Sign-in emails** go through Cloudflare Email Service from `wren@n8builds.dev` (owner confirmed, 2026-11-09), the domain already onboarded for sending (no API key).
   Links expire after 10 minutes, work once, and are stored hashed.
 
 ## Architecture
+
+- **Address: `wren.n8builds.dev`** (owner, 2026-11-09), a Workers custom domain on the n8builds.dev zone.
+  It is `PUBLIC_URL`, so Better Auth's base URL, trusted origin and email links use it.
+  The `workers.dev` address stays on and forwards there with a 308, keeping the path (`lib/security/canonical.ts`).
 
 - **Next.js 16 App Router on Cloudflare Workers through OpenNext**, the stack of the owner's other sites, Turbopack everywhere.
 - **One Durable Object agent per signed-in person** (Cloudflare Agents SDK, `agent/wren-agent.ts`), named by the verified user id.
