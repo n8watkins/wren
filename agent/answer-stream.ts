@@ -12,6 +12,7 @@ export interface AnswerStreamOptions {
   apiKey: string
   keySource: KeySource
   model: string
+  fallbackModel?: string
   history: { role: Role; text: string }[]
   baseUrl?: string
   controller: AbortController
@@ -50,6 +51,7 @@ export function answerStream(options: AnswerStreamOptions): ReadableStream<Uint8
           apiKey: options.apiKey,
           keySource,
           model,
+          fallbackModel: options.fallbackModel,
           systemPrompt: WREN_SYSTEM_PROMPT,
           history: options.history,
           signal: controller.signal,
