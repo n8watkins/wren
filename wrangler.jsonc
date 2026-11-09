@@ -1,0 +1,65 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  // Wren as one Cloudflare Worker: the Next.js app built by OpenNext, plus the
+  // Durable Objects it talks to. worker/index.ts wraps .open-next/worker.js.
+  "name": "wren",
+  "account_id": "b2c564cf83cb9184dd6d7cc4ff8b38bf",
+  "main": "worker/index.ts",
+  "compatibility_date": "2026-11-04",
+  "compatibility_flags": ["nodejs_compat"],
+  "assets": {
+    "directory": ".open-next/assets",
+    "binding": "ASSETS"
+  },
+  // OpenNext renders pages again by calling the worker itself.
+  "services": [{ "binding": "WORKER_SELF_REFERENCE", "service": "wren" }],
+  "durable_objects": {
+    "bindings": [
+      // One agent per signed-in person (agent/wren-agent.ts): their chats and
+      // their daily usage meter, in the object's own SQLite database.
+      { "name": "WREN_AGENT", "class_name": "WrenAgent" },
+      // Daily counters keyed by something other than a person
+      // (agent/daily-counter.ts): per client IP, per email address.
+      { "name": "DAILY_COUNTER", "class_name": "DailyCounter" }
+    ]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["WrenAgent", "DailyCounter"] }],
+  // Burst limits before any work is done (lib/server/rate-limit.ts). Keys are
+  // the verified session's user id or CF-Connecting-IP, never a client value.
+  "ratelimits": [
+    { "name": "USER_BURST_LIMITER", "namespace_id": "3101", "simple": { "limit": 12, "period": 60 } },
+    { "name": "IP_BURST_LIMITER", "namespace_id": "3102", "simple": { "limit": 40, "period": 60 } },
+    { "name": "AUTH_IP_LIMITER", "namespace_id": "3103", "simple": { "limit": 10, "period": 60 } }
+  ],
+  // Accounts and sessions (Better Auth), and the local test outbox.
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "wren",
+      "database_id": "192ed8c2-1296-40d5-86f9-8e1086db6e6e",
+      "migrations_dir": "migrations"
+    }
+  ],
+  // Sign-in links (lib/server/email.ts) go through Cloudflare Email Service
+  // from an address on n8builds.dev, which is onboarded for sending.
+  "send_email": [{ "name": "EMAIL" }],
+  "vars": {
+    "APP_ENV": "production",
+    // The site's public address: sign-in callbacks and links in emails.
+    "PUBLIC_URL": "https://wren.n8watkins.workers.dev",
+    "GEMINI_MODEL": "gemini-3.8-flash",
+    "EMAIL_FROM": "wren@n8builds.dev",
+    // "cloudflare" sends real email; "outbox" (local and test runs only) keeps
+    // sign-in links in D1 for scripts/magic-link.mjs. /api/health fails if a
+    // production deploy ever has "outbox".
+    "EMAIL_TRANSPORT": "cloudflare"
+  },
+  // Secrets (wrangler secret put, docs/DEPLOY.md). BETTER_AUTH_SECRET is
+  // required; GEMINI_API_KEY, GITHUB_CLIENT_ID and GITHUB_CLIENT_SECRET are
+  // optional (lib/server/env.ts) and their features say so in /api/health
+  // until the owner sets them.
+  "secrets": { "required": ["BETTER_AUTH_SECRET"] },
+  "observability": { "enabled": true, "head_sampling_rate": 1 },
+  "workers_dev": true,
+  "preview_urls": false
+}

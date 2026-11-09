@@ -1,0 +1,78 @@
+import { readFileSync, readdirSync, statSync } from 'node:fs'
+import { join, relative } from 'node:path'
+import { describe, expect, it } from 'vitest'
+
+/**
+ * Static checks for the Lessons (docs/LESSONS.md) that lint can't express:
+ * every API route is listed here with who may call it, every route that acts
+ * for a person goes through authed() (verified session, then burst limits),
+ * and nothing that looks like a debug or admin route exists.
+ */
+const ROOT = join(__dirname, '..', '..')
+
+function files(dir: string): string[] {
+  return readdirSync(dir).flatMap((name) => {
+    const path = join(dir, name)
+    return statSync(path).isDirectory() ? files(path) : [path]
+  })
+}
+
+const routes = files(join(ROOT, 'app')).filter((f) => /\/route\.tsx?$/.test(f))
+const routePath = (file: string) =>
+  '/' + relative(join(ROOT, 'app'), file).replace(/\/route\.tsx?$/, '').replace(/\([^)]+\)\//g, '')
+
+/** Every route, and who may call it. A new route fails this test until it is listed. */
+const ROUTES: Record<string, 'public' | 'session'> = {
+  '/api/auth/[...all]': 'public',
+  '/api/health': 'public',
+  '/api/chat': 'session',
+  '/api/chat/stop': 'session',
+  '/api/chats': 'session',
+  '/api/chats/[id]': 'session',
+  '/api/usage': 'session',
+}
+
+describe('API routes', () => {
+  it('are all listed with who may call them', () => {
+    expect(routes.map(routePath).sort()).toEqual(Object.keys(ROUTES).sort())
+  })
+
+  it.each(routes.map((f) => [routePath(f), f]))('%s checks the session when it must', (path, file) => {
+    const source = readFileSync(file, 'utf8')
+    if (ROUTES[path] !== 'session') return
+    const handlers = source.match(/export const (GET|POST|PUT|PATCH|DELETE)\b/g) ?? []
+    const wrapped = source.match(/export const (GET|POST|PUT|PATCH|DELETE)(<[^>]*>)?\s*=\s*authed(<[^>]*>)?\(/g) ?? []
+    expect(handlers.length).toBeGreaterThan(0)
+    expect(wrapped.length).toBe(handlers.length)
+    expect(source).not.toMatch(/export (async )?function (GET|POST|PUT|PATCH|DELETE)/)
+  })
+
+  it('include nothing that looks like a debug, admin, log or test route', () => {
+    for (const path of routes.map(routePath)) {
+      expect(path).not.toMatch(/debug|admin|logs?\b|test|internal|dump|seed|reset/i)
+    }
+  })
+})
+
+describe('source rules', () => {
+  const source = files(ROOT)
+    .filter((f) => /\.(ts|tsx|mjs)$/.test(f))
+    .filter((f) => !/node_modules|\.next|\.open-next|\.wrangler|cloudflare-env\.d\.ts|tests\//.test(f))
+
+  it('only agent/gemini.ts imports the Gemini SDK', () => {
+    const importers = source.filter((f) => /from ['"]@google\/genai['"]/.test(readFileSync(f, 'utf8')))
+    expect(importers.map((f) => relative(ROOT, f))).toEqual(['agent/gemini.ts'])
+  })
+
+  it('no request handler reads a user id from what the client sent', () => {
+    for (const file of source.filter((f) => f.includes('/app/'))) {
+      expect(readFileSync(file, 'utf8')).not.toMatch(/(body|query|searchParams|params|headers)\??\.(get\(['"])?user[-_]?id/i)
+    }
+  })
+
+  it('agent stores take no user id: the Durable Object instance is the person', () => {
+    for (const file of ['agent/chats.ts', 'agent/meter.ts']) {
+      expect(readFileSync(join(ROOT, file), 'utf8')).not.toMatch(/user_?id/i)
+    }
+  })
+})
