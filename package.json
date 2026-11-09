@@ -22,7 +22,7 @@
     "test:e2e": "playwright test",
     "prepare": "git config core.hooksPath .githooks || true",
     "release": "release-kit release",
-    "release:check": "npm run lint && npm run type-check && npm run test:unit && npm run build:worker"
+    "release:check": "release-kit check && npm run lint && npm run type-check && npm run test:unit && npm run build:worker"
   },
   "dependencies": {
     "@google/genai": "^3.0.0",
@@ -59,7 +59,7 @@
   },
   "description": "Wren: an AI assistant you can type or talk to, that researches the web and remembers what you save.",
   "author": "Nathan Watkins",
-  "license": "UNLICENSED",
+  "license": "MIT",
   "engines": {
     "node": ">=24"
   },
