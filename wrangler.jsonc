@@ -46,7 +46,7 @@
   "vars": {
     "APP_ENV": "production",
     // The site's public address: sign-in callbacks and links in emails.
-    "PUBLIC_URL": "https://wren.n8watkins.workers.dev",
+    "PUBLIC_URL": "https://wren.nathancwatkins23.workers.dev",
     "GEMINI_MODEL": "gemini-3.8-flash",
     "EMAIL_FROM": "wren@n8builds.dev",
     // "cloudflare" sends real email; "outbox" (local and test runs only) keeps

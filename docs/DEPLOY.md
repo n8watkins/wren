@@ -26,7 +26,7 @@ The GitHub OAuth app's callback URL is `<PUBLIC_URL>/api/auth/callback/github`.
 ```bash
 npm run db:migrate   # D1 migrations, remote
 npm run deploy       # OpenNext build, then wrangler deploy
-curl -s https://wren.<subdomain>.workers.dev/api/health
+curl -s https://wren.nathancwatkins23.workers.dev/api/health
 ```
 
 `PUBLIC_URL` in `wrangler.jsonc` must be the address people use: sign-in callbacks and email links are built from it.

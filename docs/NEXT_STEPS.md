@@ -5,7 +5,7 @@
 1. **Gemini demo key**: create a key in Google AI Studio for the demo (a dedicated project with a spending cap), then `npx wrangler secret put GEMINI_API_KEY`.
    Until then, chat on the preview works with a visitor's own key.
 2. **GitHub OAuth app**: on github.com, Settings, Developer settings, OAuth Apps, New.
-   Homepage `https://wren.<subdomain>.workers.dev`, callback `https://wren.<subdomain>.workers.dev/api/auth/callback/github`.
+   Homepage `https://wren.nathancwatkins23.workers.dev`, callback `https://wren.nathancwatkins23.workers.dev/api/auth/callback/github`.
    Then `npx wrangler secret put GITHUB_CLIENT_ID` and `GITHUB_CLIENT_SECRET`.
    Make a second app for local runs (callback `http://localhost:3120/api/auth/callback/github`) if you want GitHub sign-in there.
 3. **Email sender**: sign-in links go from `wren@n8builds.dev` through Cloudflare Email Service.
