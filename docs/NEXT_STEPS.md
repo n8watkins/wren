@@ -23,3 +23,11 @@ Settled: sign-in emails come from `wren@n8builds.dev`, and Wren lives at `wren.n
 
 - 2026-11-09: release-kit and CI checks (#1); phase 1, foundation and chat (#4).
 - 2026-11-09: preview deployed to https://wren.nathancwatkins23.workers.dev (D1 `wren` migrated, Durable Objects created, `BETTER_AUTH_SECRET` set). Email sign-in works there; chat needs a visitor's own key until the demo key is set.
+
+## Keys
+
+Checked 2026-11-09 against the secret names on the Worker and in GitHub Actions (names only, no values).
+New values go into the owner's pass-env store and are sent with `pass-env pipe <entry> -- <command>`; never commit or paste a value.
+
+- [ ] `GEMINI_API_KEY` (missing): guests cannot chat until it is a Worker secret. Make a Wren-only key in Google AI Studio, then `pass-env pipe wren/GEMINI_API_KEY -- npx wrangler secret put GEMINI_API_KEY`.
+- [x] `BETTER_AUTH_SECRET`, `TURNSTILE_SECRET_KEY`: set on the Worker.
