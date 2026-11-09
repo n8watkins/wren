@@ -327,3 +327,11 @@ describe('embedding text', () => {
     expect(documentText({ kind: 'note', title: '', text: 'x'.repeat(10_000), url: null, file: null }).length).toBe(6_000)
   })
 })
+
+describe('file excerpts', () => {
+  it('read Markdown headings as lead-ins on one line', async () => {
+    const { memory } = engine()
+    await memory.addFile('plan.md', bytes('# Attic plan\n\nInsulate first.\n\n## Done?\nNot yet.'))
+    expect((await memory.list()).memories[0].text).toBe('Attic plan: Insulate first. Done? Not yet.')
+  })
+})

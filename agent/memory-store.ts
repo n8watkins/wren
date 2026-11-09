@@ -182,11 +182,3 @@ function normalize(text: string): string {
     .trim()
     .replace(/[.!?]+$/, '')
 }
-
-/** Whether every word of the search is somewhere in the memory (title, text, link or file name). */
-export function matchesWords(memory: Memory, query: string): boolean {
-  const words = normalize(query).split(' ').filter(Boolean)
-  if (words.length === 0) return true
-  const haystack = normalize([memory.title, memory.text, memory.url ?? '', memory.file?.name ?? ''].join(' '))
-  return words.every((word) => haystack.includes(word))
-}

@@ -104,3 +104,15 @@ export function formatBytes(bytes: number): string {
   const mb = bytes / (1024 * 1024)
   return `${mb < 10 ? mb.toFixed(1) : Math.round(mb)} MB`
 }
+
+function normalizeWords(text: string): string {
+  return text.toLowerCase().replace(/\s+/g, ' ').trim()
+}
+
+/** Whether every word of a search is somewhere in the memory (title, text, link or file name). */
+export function matchesWords(memory: Pick<Memory, 'title' | 'text' | 'url' | 'file'>, query: string): boolean {
+  const words = normalizeWords(query).split(' ').filter(Boolean)
+  if (words.length === 0) return true
+  const haystack = normalizeWords([memory.title, memory.text, memory.url ?? '', memory.file?.name ?? ''].join(' '))
+  return words.every((word) => haystack.includes(word))
+}

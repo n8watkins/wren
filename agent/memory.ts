@@ -7,7 +7,6 @@ import {
   getMemory,
   insertMemory,
   listMemories,
-  matchesWords,
   memoryUsage,
   setIndexed,
   unindexed,
@@ -17,7 +16,7 @@ import {
 import type { VectorStore } from './memory-vectors'
 import type { ErrorCode } from '../lib/errors'
 import { log } from '../lib/log'
-import { MEMORY_LIMITS, fileTypeFor, type Memory, type MemoryKind, type MemoryUsage } from '../lib/memory'
+import { MEMORY_LIMITS, fileTypeFor, matchesWords, type Memory, type MemoryKind, type MemoryUsage } from '../lib/memory'
 
 /**
  * The memory engine for one person: their memories in their agent's SQLite
@@ -158,8 +157,13 @@ function cleanFileName(name: string): string {
 
 /** The memory as a list shows it: a file's text shortened to an excerpt. */
 function forList(memory: Memory): Memory {
-  if (memory.kind !== 'file' || memory.text.length <= MEMORY_LIMITS.excerptChars) return memory
-  return { ...memory, text: `${memory.text.slice(0, MEMORY_LIMITS.excerptChars).trimEnd()}…` }
+  if (memory.kind !== 'file') return memory
+  // One line of plain words: a Markdown heading reads as a lead-in ("Plan: ..."), no blank lines.
+  const flat = memory.text
+    .replace(/^#{1,6}\s+(.*?)\s*$/gm, (_, heading: string) => (/[.:!?]$/.test(heading) ? heading : `${heading}:`))
+    .replace(/\s+/g, ' ')
+    .trim()
+  return { ...memory, text: flat.length <= MEMORY_LIMITS.excerptChars ? flat : `${flat.slice(0, MEMORY_LIMITS.excerptChars).trimEnd()}…` }
 }
 
 export class MemoryEngine {
