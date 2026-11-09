@@ -28,7 +28,7 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run lint
-      - run: npx tsc --noEmit
+      - run: npm run type-check
       - run: npm run build
 
   # The one check branch protection would require: every job above passed.

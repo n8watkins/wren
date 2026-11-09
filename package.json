@@ -9,7 +9,8 @@
     "lint": "eslint",
     "release": "release-kit release",
     "release:check": "release-kit check && npm run lint && npm run build",
-    "prepare": "git config core.hooksPath .githooks || true"
+    "prepare": "git config core.hooksPath .githooks || true",
+    "type-check": "next typegen && tsc --noEmit"
   },
   "dependencies": {
     "next": "16.4.5",
