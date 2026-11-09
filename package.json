@@ -6,7 +6,11 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "release": "release-kit release",
+    "release:check": "release-kit check && npm run lint && npm run build",
+    "prepare": "git config core.hooksPath .githooks || true",
+    "type-check": "next typegen && tsc --noEmit"
   },
   "dependencies": {
     "next": "16.4.5",
@@ -19,6 +23,7 @@
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.4.5",
+    "release-kit": "github:n8watkins/release-kit#v2.8.1",
     "typescript": "^5"
   }
 }
