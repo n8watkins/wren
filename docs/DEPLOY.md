@@ -26,10 +26,12 @@ The GitHub OAuth app's callback URL is `<PUBLIC_URL>/api/auth/callback/github`.
 ```bash
 npm run db:migrate   # D1 migrations, remote
 npm run deploy       # OpenNext build, then wrangler deploy
-curl -s https://wren.nathancwatkins23.workers.dev/api/health
+curl -s https://wren.n8builds.dev/api/health
 ```
 
-`PUBLIC_URL` in `wrangler.jsonc` must be the address people use: sign-in callbacks and email links are built from it.
+`PUBLIC_URL` in `wrangler.jsonc` must be the address people use (`https://wren.n8builds.dev`): sign-in callbacks, trusted origins and email links are built from it.
+`wren.n8builds.dev` is a Workers custom domain (`routes` in `wrangler.jsonc`); `wrangler deploy` creates its DNS record and certificate.
+The `workers.dev` address forwards to it.
 
 The first deploy needs the required secret up front, because a Worker that doesn't exist yet can't take `wrangler secret put`: write `BETTER_AUTH_SECRET=<random>` to a file outside the repo, run `npx wrangler deploy --secrets-file <file>` after `npm run build:worker`, then delete the file.
 
