@@ -47,7 +47,9 @@
     "APP_ENV": "production",
     // The site's public address: sign-in callbacks and links in emails.
     "PUBLIC_URL": "https://wren.n8builds.dev",
-    "GEMINI_MODEL": "gemini-3.8-flash",
+    // Chat model, and the one tried when it fails or stays silent (agent/gemini.ts).
+    "GEMINI_MODEL": "gemini-3.5-flash-lite",
+    "GEMINI_FALLBACK_MODEL": "gemini-3.1-flash-lite",
     "EMAIL_FROM": "wren@n8builds.dev",
     // "cloudflare" sends real email; "outbox" (local and test runs only) keeps
     // sign-in links in D1 for scripts/magic-link.mjs. /api/health fails if a

@@ -1,5 +1,6 @@
 import { ApiError, GoogleGenAI, ThinkingLevel } from '@google/genai'
 import type { Role } from './chats'
+import { log } from '../lib/log'
 
 /**
  * The only module that talks to Gemini (eslint.config.mjs forbids importing
@@ -34,6 +35,10 @@ export interface StreamReplyOptions {
   apiKey: string
   keySource: KeySource
   model: string
+  /** Tried once when `model` fails or stays silent before any text. */
+  fallbackModel?: string
+  /** How long a model may take to send its first text before it counts as failed. */
+  firstTextMs?: number
   systemPrompt: string
   history: { role: Role; text: string }[]
   signal: AbortSignal
@@ -52,33 +57,83 @@ export function classifyGeminiError(error: unknown, keySource: KeySource): Gemin
   return new GeminiError('upstream_error', status)
 }
 
-/** Streams the model's answer as text chunks. Throws GeminiError. */
+/** A model that has sent no text by then is treated as down (some never answer at all). */
+const FIRST_TEXT_MS = 20_000
+
+/** Failures another model might not have: outages, silence, per-model quota. A bad key is a bad key everywhere. */
+function worthAnotherModel(error: GeminiError): boolean {
+  return error.code === 'upstream_error' || error.code === 'demo_busy' || error.code === 'user_key_quota'
+}
+
+/**
+ * Streams the answer as text chunks. Tries `model`, then `fallbackModel` once
+ * if the first failed before any text. Throws GeminiError.
+ */
 export async function* streamReply(options: StreamReplyOptions): AsyncGenerator<string> {
-  const ai = new GoogleGenAI({
-    apiKey: options.apiKey,
-    httpOptions: options.baseUrl ? { baseUrl: options.baseUrl } : undefined,
-  })
-  let stream: AsyncGenerator<{ text?: string }>
-  try {
-    stream = await ai.models.generateContentStream({
-      model: options.model,
-      contents: options.history.map((turn) => ({ role: turn.role, parts: [{ text: turn.text }] })),
-      config: {
-        systemInstruction: options.systemPrompt,
-        abortSignal: options.signal,
-        thinkingConfig: { thinkingLevel: ThinkingLevel.LOW },
-      },
-    })
-  } catch (error) {
-    if (options.signal.aborted) return
-    throw classifyGeminiError(error, options.keySource)
-  }
-  try {
-    for await (const chunk of stream) {
-      if (chunk.text) yield chunk.text
+  const models = [options.model]
+  if (options.fallbackModel && options.fallbackModel !== options.model) models.push(options.fallbackModel)
+  let failure: GeminiError | undefined
+  for (const model of models) {
+    let sentText = false
+    try {
+      for await (const text of streamModel(options, model)) {
+        sentText = true
+        yield text
+      }
+      return
+    } catch (error) {
+      if (options.signal.aborted) return
+      failure = error instanceof GeminiError ? error : classifyGeminiError(error, options.keySource)
+      if (sentText || !worthAnotherModel(failure)) throw failure
+      log.warn('chat.model_failed', { model, code: failure.code, upstreamStatus: failure.upstreamStatus, keySource: options.keySource })
     }
-  } catch (error) {
-    if (options.signal.aborted) return
-    throw classifyGeminiError(error, options.keySource)
+  }
+  throw failure ?? new GeminiError('upstream_error')
+}
+
+/** One model's stream. Its own abort covers both Stop and a model that stays silent. */
+async function* streamModel(options: StreamReplyOptions, model: string): AsyncGenerator<string> {
+  const attempt = new AbortController()
+  const stop = () => attempt.abort()
+  options.signal.addEventListener('abort', stop)
+  let silent = false
+  const timer = setTimeout(() => {
+    silent = true
+    attempt.abort()
+  }, options.firstTextMs ?? FIRST_TEXT_MS)
+  const fail = (error: unknown) => (silent ? new GeminiError('upstream_error', 504) : classifyGeminiError(error, options.keySource))
+  try {
+    const ai = new GoogleGenAI({
+      apiKey: options.apiKey,
+      httpOptions: options.baseUrl ? { baseUrl: options.baseUrl } : undefined,
+    })
+    let stream: AsyncGenerator<{ text?: string }>
+    try {
+      stream = await ai.models.generateContentStream({
+        model,
+        contents: options.history.map((turn) => ({ role: turn.role, parts: [{ text: turn.text }] })),
+        config: {
+          systemInstruction: options.systemPrompt,
+          abortSignal: attempt.signal,
+          thinkingConfig: { thinkingLevel: ThinkingLevel.LOW },
+        },
+      })
+    } catch (error) {
+      throw fail(error)
+    }
+    try {
+      for await (const chunk of stream) {
+        if (chunk.text) {
+          clearTimeout(timer)
+          yield chunk.text
+        }
+      }
+    } catch (error) {
+      throw fail(error)
+    }
+    if (silent) throw fail(undefined)
+  } finally {
+    clearTimeout(timer)
+    options.signal.removeEventListener('abort', stop)
   }
 }

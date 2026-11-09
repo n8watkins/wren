@@ -45,7 +45,7 @@ export async function GET(): Promise<Response> {
     },
     chat: {
       ok: demoKey,
-      detail: demoKey ? `${env.GEMINI_MODEL} on the demo key` : 'no demo key yet: chat works with your own Gemini key',
+      detail: demoKey ? `${env.GEMINI_MODEL} on the demo key${env.GEMINI_FALLBACK_MODEL ? `, falling back to ${env.GEMINI_FALLBACK_MODEL}` : ''}` : 'no demo key yet: chat works with your own Gemini key',
     },
     guestChat: {
       ok: guests,
