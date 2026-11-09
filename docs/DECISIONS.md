@@ -14,7 +14,12 @@ Read this before changing product, design or workflow, and add every new decisio
   Fonts: Bricolage Grotesque (display), Inter (interface), Newsreader (long reading), JetBrains Mono (labels and numbers), self-hosted through `next/font`.
 - **No landing page**: the app is the first screen, with a "How Wren works" modal on the first visit that "?" reopens, and in-context tips.
 - **Tips are a short guided tour** (owner, 2026-11-09): a toolbar with Skip tour, Previous (←), a "2 of 4" counter and Next (→), which reads Done on the last step; X, Esc and Skip tour end the whole tour; the arrow keys move back and forward and Enter is Next; on phones the buttons are at least 44 px and the tip stays on screen. "Show me around" in the "?" dialog starts it again.
-- **Phases**: 1 foundation and chat (this), 2 voice, 3 research, 4 memory, then launch.
+- **Phases** (owner, 2026-11-09; reordered from voice, research, memory): 1 foundation and chat (done), 2 memory, 3 research, 4 voice, then launch.
+  Memory and research cores are built in parallel lanes; each is wired into chat one at a time, memory first.
+  Voice goes last and alone because it moves chat onto the agent's WebSocket, the code both other phases plug into.
+- **Research searches with Tavily, with Gemini's Google Search as the backup** (owner, 2026-11-09).
+  Tavily returns results and page text, so a run can show what it searched, read and cited; the backup covers Tavily being down or out of credits.
+  Wren has its own key (`TAVILY_API_KEY`), never one shared with another project.
 - **Memory saves both ways** (owner, 2026-11-09): Wren saves short, lasting facts from a conversation on its own (preferences, projects, recurring topics), and a "Save to Memory" button saves anything you choose.
   Every save Wren makes on its own shows a "Saved to Memory · Undo" line in the chat, so nothing is saved silently, and the Memory library lists, edits and deletes everything.
   Guests get no memory, as nothing of theirs is saved past the tab.
