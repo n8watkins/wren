@@ -10,12 +10,38 @@ function pct(used: number, limit: number): string {
 export function Meter({
   usage,
   ownKey,
+  guest,
   onKey,
+  onSignIn,
 }: {
   usage: UsageSnapshot
   ownKey: boolean
+  guest: boolean
   onKey: () => void
+  onSignIn: () => void
 }) {
+  if (guest && !ownKey) {
+    return (
+      <div className="meter" data-tip="meter" data-testid="meter">
+        <div className="h">
+          <span>Guest, today</span>
+          <button type="button" onClick={onSignIn}>
+            Sign in
+          </button>
+        </div>
+        <div className="mrow">
+          <span>Chat</span>
+          <span className="t">
+            <b style={{ width: pct(usage.chat.used, usage.chat.limit), background: 'var(--text-2)' }} />
+          </span>
+          <span className="v" data-testid="meter-chat">
+            {usage.chat.used}/{usage.chat.limit}
+          </span>
+        </div>
+        <p className="upsell">Sign in for 10x more messages, voice, research and memory.</p>
+      </div>
+    )
+  }
   return (
     <div className="meter" data-tip="meter" data-testid="meter">
       <div className="h">
@@ -69,7 +95,7 @@ export function UsageRing({ usage, ownKey, onClick }: { usage: UsageSnapshot; ow
   const share = ownKey ? 0 : Math.min(1, usage.chat.used / Math.max(1, usage.chat.limit))
   const label = ownKey
     ? 'Using your own Gemini key: no daily limit'
-    : `${usage.chat.used} of ${usage.chat.limit} demo messages used today`
+    : `${usage.chat.used} of ${usage.chat.limit} messages used today`
   return (
     <button type="button" className="ring2" onClick={onClick} aria-label={label} title={label} data-testid="usage-ring">
       <svg viewBox="0 0 32 32" aria-hidden="true">

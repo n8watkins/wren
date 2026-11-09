@@ -3,10 +3,12 @@ import { headers } from 'next/headers'
 import { WrenApp } from '@/components/app/WrenApp'
 import type { ChatSummary } from '@/agent/chats'
 import type { UsageSnapshot } from '@/lib/limits'
-import { agentFor } from '@/lib/server/agent'
+import { agentFor, guestAgentFor } from '@/lib/server/agent'
 import { signInMethods } from '@/lib/server/auth'
 import { getEnv } from '@/lib/server/env'
+import { readGuest } from '@/lib/server/guest'
 import { getVerifiedSession } from '@/lib/server/session'
+import { guestChatConfigured } from '@/lib/server/turnstile'
 import { log } from '@/lib/log'
 
 /**
@@ -16,7 +18,9 @@ import { log } from '@/lib/log'
  */
 export default async function AppLayout({ children }: { children: ReactNode }) {
   const env = getEnv()
-  const session = await getVerifiedSession(env, await headers())
+  const requestHeaders = await headers()
+  const session = await getVerifiedSession(env, requestHeaders)
+  const guestOn = !session && guestChatConfigured(env)
   let chats: ChatSummary[] = []
   let usage: UsageSnapshot | null = null
   if (session) {
@@ -28,6 +32,15 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
       // loads them again through the API.
       log.warn('layout.agent_unavailable', { code: error instanceof Error ? error.name : 'unknown' })
     }
+  } else if (guestOn) {
+    const guestId = await readGuest(env, requestHeaders)
+    if (guestId) {
+      try {
+        usage = await (await guestAgentFor(env, guestId)).guestUsage()
+      } catch (error) {
+        log.warn('layout.agent_unavailable', { code: error instanceof Error ? error.name : 'unknown' })
+      }
+    }
   }
   return (
     <>
@@ -36,6 +49,7 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
         github={signInMethods(env).github}
         initialChats={chats}
         initialUsage={usage}
+        guestSiteKey={guestOn ? env.TURNSTILE_SITE_KEY : null}
       />
       {children}
     </>

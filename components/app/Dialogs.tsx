@@ -80,8 +80,8 @@ export function HowItWorksDialog({
               Your key, limits and privacy
             </b>
             <p>
-              The shared demo key has a daily limit. Add your own Gemini key to lift it; it&rsquo;s kept in this browser. Delete any
-              chat at any time.
+              Try it as a guest: 5 messages a day, kept only in this tab. Sign in for 10x more messages, voice, research and
+              memory, with your chats saved. Or add your own Gemini key to lift the limit; it&rsquo;s kept in this browser.
             </p>
           </div>
         </li>

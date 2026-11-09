@@ -3,11 +3,12 @@
 import { usePathname, useRouter } from 'next/navigation'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { ChatMessage, ChatSummary } from '@/agent/chats'
-import { ApiError, api, sendMessage } from '@/lib/client/api'
+import { ApiError, api, sendGuestMessage, sendMessage } from '@/lib/client/api'
 import { authClient } from '@/lib/client/auth-client'
-import { KEYS, useLocalSetting, writeLocal } from '@/lib/client/storage'
-import { errorMessage } from '@/lib/errors'
-import { DAILY_LIMITS, nextUtcMidnight, type UsageSnapshot } from '@/lib/limits'
+import { GUEST_CHAT_KEY, KEYS, useLocalSetting, useSessionSetting, writeLocal, writeSession } from '@/lib/client/storage'
+import { turnstileToken } from '@/lib/client/turnstile'
+import { SIGN_IN_FIXES, errorMessage, isErrorCode } from '@/lib/errors'
+import { DAILY_LIMITS, GUEST_LIMITS, nextUtcMidnight, type UsageSnapshot } from '@/lib/limits'
 import type { ExplainerId } from '../explainers'
 import { Icon } from '../Icons'
 import { WrenMark } from '../WrenMark'
@@ -22,14 +23,47 @@ export interface WrenAppProps {
   github: boolean
   initialChats: ChatSummary[]
   initialUsage: UsageSnapshot | null
+  /** Turnstile's public site key when guest chat is on; null means guests must sign in. */
+  guestSiteKey: string | null
 }
 
-const EMPTY_USAGE = (): UsageSnapshot => ({
-  chat: { used: 0, limit: DAILY_LIMITS.chat },
-  voiceMinutes: { used: 0, limit: DAILY_LIMITS.voiceMinutes },
-  research: { used: 0, limit: DAILY_LIMITS.research },
+const EMPTY_USAGE = (guest: boolean): UsageSnapshot => ({
+  chat: { used: 0, limit: guest ? GUEST_LIMITS.chat : DAILY_LIMITS.chat },
+  voiceMinutes: { used: 0, limit: guest ? 0 : DAILY_LIMITS.voiceMinutes },
+  research: { used: 0, limit: guest ? 0 : DAILY_LIMITS.research },
   resetsAt: nextUtcMidnight(),
 })
+
+/** A guest's chat, kept only in this tab. */
+interface GuestChat {
+  title: string
+  messages: ChatMessage[]
+}
+
+function parseGuestChat(raw: string | null): GuestChat | null {
+  try {
+    const saved = JSON.parse(raw ?? 'null') as GuestChat | null
+    if (!saved || typeof saved.title !== 'string' || !Array.isArray(saved.messages)) return null
+    return {
+      title: saved.title,
+      messages: saved.messages.filter(
+        (m) => m && (m.role === 'user' || m.role === 'model') && typeof m.content === 'string' && typeof m.id === 'string'
+      ),
+    }
+  } catch {
+    return null
+  }
+}
+
+/** A new message's id and time (outside render: called from event handlers). */
+function stamp(): { id: string; at: number } {
+  return { id: `g-${crypto.randomUUID()}`, at: Date.now() }
+}
+
+function guestTitle(text: string): string {
+  const line = text.replace(/\s+/g, ' ').trim()
+  return line.length <= 60 ? line : `${line.slice(0, 59).trimEnd()}…`
+}
 
 const SUGGESTIONS: { icon: 'chat' | 'res' | 'mem'; tone: string; text: string }[] = [
   { icon: 'chat', tone: 'var(--ember)', text: 'Talk me through a weeknight risotto' },
@@ -69,18 +103,30 @@ type Modal =
   | null
 
 /** The whole app: one client shell that the routes (/, /chat/:id, /runs, /memory) share. */
-export function WrenApp({ person, github, initialChats, initialUsage }: WrenAppProps) {
+export function WrenApp({ person, github, initialChats, initialUsage, guestSiteKey }: WrenAppProps) {
   const router = useRouter()
   const pathname = usePathname()
   const { place, chatId } = placeFrom(pathname)
 
   const [chats, setChats] = useState(initialChats)
-  const [usage, setUsage] = useState<UsageSnapshot>(() => initialUsage ?? EMPTY_USAGE())
+  const isGuest = person === null
+  const guestOn = isGuest && guestSiteKey !== null
+  const [usage, setUsage] = useState<UsageSnapshot>(() => initialUsage ?? EMPTY_USAGE(isGuest))
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [loadedChatId, setLoadedChatId] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [streaming, setStreaming] = useState<StreamingAnswer | null>(null)
-  const [error, setError] = useState<string | null>(null)
+  const [error, setErrorState] = useState<{ message: string; signIn: boolean } | null>(null)
+  const setError = useCallback((message: string | null, signIn = false) => {
+    setErrorState(message === null ? null : { message, signIn })
+  }, [])
+  const failWith = (failure: unknown) => {
+    const code = failure instanceof ApiError ? failure.code : 'internal'
+    setError(failure instanceof ApiError ? failure.message : errorMessage('internal'), isErrorCode(code) && SIGN_IN_FIXES.has(code))
+  }
+  const turnstileBox = useRef<HTMLDivElement>(null)
+  const guestChat = parseGuestChat(useSessionSetting(GUEST_CHAT_KEY))
+  const saveGuestChat = (next: GuestChat | null) => writeSession(GUEST_CHAT_KEY, next ? JSON.stringify(next) : null)
   const [draft, setDraft] = useState('')
   const [focusKey, setFocusKey] = useState(0)
   const [modal, setModal] = useState<Modal>(null)
@@ -143,10 +189,11 @@ export function WrenApp({ person, github, initialChats, initialUsage }: WrenAppP
     return () => {
       cancelled = true
     }
-  }, [person, place, chatId, loadedChatId])
+  }, [person, place, chatId, loadedChatId, setError])
 
   const refreshUsage = useCallback(() => {
     if (person) api.usage().then(setUsage, () => undefined)
+    else api.guestUsage().then(setUsage, () => undefined)
   }, [person])
 
   const openChat = (id: string) => {
@@ -161,13 +208,79 @@ export function WrenApp({ person, github, initialChats, initialUsage }: WrenAppP
       streamChatRef.current = null
       setMessages([])
       setLoadedChatId(null)
+      if (isGuest) saveGuestChat(null)
     }
     router.push('/')
     setFocusKey((n) => n + 1)
   }
 
+  /**
+   * A guest's message: their chat lives in this tab, the earlier turns go with
+   * each message, and the first one runs the human check (Turnstile).
+   */
+  const runGuest = async (opts: { text?: string; regenerate?: boolean }) => {
+    if (!guestSiteKey) return
+    const start = guestChat ?? { title: '', messages: [] }
+    const base = opts.regenerate && start.messages.at(-1)?.role === 'model' ? start.messages.slice(0, -1) : start.messages
+    const prompt = opts.regenerate ? base.at(-1) : undefined
+    const text = opts.regenerate ? prompt?.content : opts.text
+    if (!text || (opts.regenerate && prompt?.role !== 'user')) return
+    const earlier = opts.regenerate ? base.slice(0, -1) : base
+    const sent = stamp()
+    const withPrompt: GuestChat = {
+      title: start.title || guestTitle(text),
+      messages: opts.regenerate ? base : [...base, { id: sent.id, role: 'user', content: text, status: 'done', createdAt: sent.at }],
+    }
+    saveGuestChat(withPrompt)
+
+    const controller = new AbortController()
+    abortRef.current = controller
+    setError(null)
+    setStreaming({ chatId: null, text: '' })
+    let answer = ''
+    let finished: ChatMessage['status'] | null = null
+    try {
+      for await (const event of sendGuestMessage({
+        text,
+        history: earlier.map((m) => ({ role: m.role, text: m.content })).slice(-GUEST_LIMITS.historyTurns),
+        userKey,
+        signal: controller.signal,
+        humanCheck: () => turnstileToken(turnstileBox.current ?? document.body, guestSiteKey),
+      })) {
+        if (event.t === 'start' && event.usage) setUsage(event.usage)
+        else if (event.t === 'delta') {
+          answer += event.text
+          setStreaming((current) => (current ? { ...current, text: answer } : current))
+        } else if (event.t === 'done') finished = event.status
+        else if (event.t === 'error') {
+          finished = 'error'
+          setError(errorMessage(event.code), SIGN_IN_FIXES.has(event.code))
+        }
+      }
+      if (controller.signal.aborted && finished === null) finished = 'stopped'
+    } catch (failure) {
+      if (!opts.regenerate) {
+        saveGuestChat(start.messages.length ? start : null)
+        setDraft(text)
+      }
+      failWith(failure)
+    } finally {
+      if (answer) {
+        const done = stamp()
+        saveGuestChat({
+          ...withPrompt,
+          messages: [...withPrompt.messages, { id: done.id, role: 'model', content: answer, status: finished ?? 'stopped', createdAt: done.at }],
+        })
+      }
+      setStreaming(null)
+      abortRef.current = null
+      refreshUsage()
+    }
+  }
+
   const run = async (opts: { text?: string; regenerate?: boolean }) => {
     if (!person) {
+      if (guestOn) return runGuest(opts)
       setModal({ kind: 'sign-in', reason: 'Sign in to start chatting. It keeps your chats on every device.' })
       return
     }
@@ -217,7 +330,7 @@ export function WrenApp({ person, github, initialChats, initialUsage }: WrenAppP
     } catch (failure) {
       setMessages((list) => list.filter((m) => !m.id.startsWith('pending-')))
       if (opts.text) setDraft(opts.text)
-      setError(failure instanceof ApiError ? failure.message : errorMessage('internal'))
+      failWith(failure)
       if (failure instanceof ApiError && failure.code === 'unauthorized') {
         setModal({ kind: 'sign-in', reason: 'Your session ended. Sign in again to keep chatting.' })
       }
@@ -252,7 +365,12 @@ export function WrenApp({ person, github, initialChats, initialUsage }: WrenAppP
   }
 
   const regenerate = () => {
-    if (streaming || !chatId) return
+    if (streaming) return
+    if (isGuest) {
+      void runGuest({ regenerate: true })
+      return
+    }
+    if (!chatId) return
     setMessages((list) => (list.at(-1)?.role === 'model' ? list.slice(0, -1) : list))
     void run({ regenerate: true })
   }
@@ -291,11 +409,13 @@ export function WrenApp({ person, github, initialChats, initialUsage }: WrenAppP
       ? 'Research runs'
       : place === 'memory'
         ? 'Memory'
-        : chatId
-          ? (chats.find((c) => c.id === chatId)?.title ?? 'Chat')
-          : 'New chat'
+        : isGuest
+          ? guestChat?.title || 'New chat'
+          : chatId
+            ? (chats.find((c) => c.id === chatId)?.title ?? 'Chat')
+            : 'New chat'
 
-  const shownMessages = place === 'chat' && chatId === loadedChatId ? messages : []
+  const shownMessages = place !== 'chat' ? [] : isGuest ? (guestChat?.messages ?? []) : chatId === loadedChatId ? messages : []
   const showWelcome = place === 'chat' && !chatId && shownMessages.length === 0 && !streaming
   const chromeProps = {
     place,
@@ -304,6 +424,7 @@ export function WrenApp({ person, github, initialChats, initialUsage }: WrenAppP
     person,
     usage,
     ownKey: userKey !== null,
+    guest: guestOn,
     theme,
     setTheme,
     onNewChat: newChat,
@@ -376,7 +497,16 @@ export function WrenApp({ person, github, initialChats, initialUsage }: WrenAppP
             <section className="welcome" data-testid="welcome">
               <WrenMark size={44} state="idle" />
               <h2>What are we working on?</h2>
-              {!person && <p>Ask anything. You&rsquo;ll sign in with GitHub or email before your first message.</p>}
+              {guestOn ? (
+                <p data-testid="guest-intro">
+                  Try Wren as a guest: {GUEST_LIMITS.chat} messages today, kept only in this tab.{' '}
+                  <button type="button" className="linkbtn" onClick={() => setModal({ kind: 'sign-in', reason: null })}>
+                    Sign in for 10x more messages, voice, research and memory
+                  </button>
+                </p>
+              ) : (
+                !person && <p>Ask anything. You&rsquo;ll sign in with GitHub or email before your first message.</p>
+              )}
               <div className="sugs">
                 {SUGGESTIONS.map((s) => (
                   <button key={s.text} type="button" className="sug" onClick={() => void run({ text: s.text })}>
@@ -402,6 +532,8 @@ export function WrenApp({ person, github, initialChats, initialUsage }: WrenAppP
             />
           ))}
 
+        {/* Where Turnstile shows itself, the rare times it wants an interaction. */}
+        <div ref={turnstileBox} className="turnstile" data-testid="turnstile" />
         {place === 'chat' && (
           <Composer
             draft={draft}
@@ -409,6 +541,7 @@ export function WrenApp({ person, github, initialChats, initialUsage }: WrenAppP
             busy={streaming !== null}
             error={error}
             onDismissError={() => setError(null)}
+            onSignIn={() => setModal({ kind: 'sign-in', reason: null })}
             onSend={send}
             onStop={stop}
             onExplain={explain}

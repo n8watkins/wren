@@ -1,5 +1,5 @@
 import { Icon, type IconName } from './Icons'
-import { DAILY_LIMITS } from '@/lib/limits'
+import { DAILY_LIMITS, GUEST_LIMITS } from '@/lib/limits'
 
 /**
  * The short "How this works" explainers that tips and buttons open. Voice,
@@ -55,9 +55,9 @@ const EXPLAINERS: Record<ExplainerId, Explainer> = {
     tone: 'c-ink',
     kicker: 'Usage meter',
     title: 'Limits and your own key',
-    body: `Without a key you share the demo key: ${DAILY_LIMITS.chat} messages, ${DAILY_LIMITS.voiceMinutes} voice minutes and ${DAILY_LIMITS.research} research runs a day. Add your own Gemini key and the limit goes away. Your key is kept in this browser and sent only with your own requests, never stored on the server.`,
+    body: `Without a key you share the demo key. As a guest that is ${GUEST_LIMITS.chat} messages a day, kept only in this tab; signed in, it is ${DAILY_LIMITS.chat} messages, ${DAILY_LIMITS.voiceMinutes} voice minutes and ${DAILY_LIMITS.research} research runs a day, with your chats saved. Add your own Gemini key and the limit goes away. Your key is kept in this browser and sent only with your own requests, never stored on the server.`,
     flow: ['Demo key', 'Daily counter', 'or', 'Your key', 'No limit'],
-    under: 'your own Durable Object counts your use and resets at midnight UTC.',
+    under: 'a Durable Object counts each person’s use (and each guest’s, network’s and the whole site’s guest total) and resets at midnight UTC.',
     soon: false,
   },
 }

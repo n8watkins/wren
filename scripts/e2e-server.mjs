@@ -2,7 +2,9 @@
 // its own wrangler config and local state under .wrangler/e2e, so it never
 // touches `npm run preview`'s data or .dev.vars. Test settings: sign-in links
 // go to the local outbox, Gemini is the mock in tests/mocks/gemini.mjs, and
-// the burst limits are raised so parallel tests from one IP aren't throttled
+// Turnstile uses Cloudflare's test keys with siteverify mocked, the site-wide
+// guest cap is low, and the burst limits are raised so parallel tests from one
+// IP aren't throttled
 // (the limits themselves are Cloudflare's; the daily meter is tested as is).
 // E2E_SKIP_BUILD=1 reuses the last build.
 import { execFileSync, spawn } from 'node:child_process'
@@ -32,6 +34,12 @@ config.vars = {
   GEMINI_BASE_URL: `http://${host}:${mockPort}`,
   GEMINI_API_KEY: 'test-demo-key',
   BETTER_AUTH_SECRET: 'e2e-only-secret-not-used-anywhere-else-0123456789',
+  // Cloudflare's always-pass Turnstile test keys; siteverify is the mock.
+  TURNSTILE_SITE_KEY: '1x00000000000000000000AA',
+  TURNSTILE_SECRET_KEY: '1x0000000000000000000000000000000AA',
+  TURNSTILE_VERIFY_URL: `http://${host}:${mockPort}/siteverify`,
+  // Low enough for tests/e2e/guest-cap.spec.ts to reach after the other tests.
+  GUEST_SITE_DAILY_CAP: '120',
 }
 delete config.secrets
 mkdirSync(dir, { recursive: true })

@@ -9,3 +9,12 @@ import { getAgentByName } from 'agents/routing'
 export function agentFor(env: CloudflareEnv, verifiedUserId: string) {
   return getAgentByName(env.WREN_AGENT, verifiedUserId)
 }
+
+/**
+ * A guest's agent, named from the id in their signed guest cookie
+ * (lib/server/guest.ts). The `guest:` prefix keeps it apart from people's
+ * agents: Better Auth's user ids never contain a colon.
+ */
+export function guestAgentFor(env: CloudflareEnv, verifiedGuestId: string) {
+  return getAgentByName(env.WREN_AGENT, `guest:${verifiedGuestId}`)
+}

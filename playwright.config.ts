@@ -35,14 +35,16 @@ export default defineConfig({
     { name: 'api', testMatch: /api\.spec\.ts/ },
     {
       name: 'desktop',
-      testIgnore: /api\.spec\.ts/,
+      testIgnore: /(api|guest-cap)\.spec\.ts/,
       use: { ...devices['Desktop Chrome'], viewport: { width: 1280, height: 800 } },
     },
     {
       name: 'phone',
-      testIgnore: /api\.spec\.ts/,
+      testIgnore: /(api|guest-cap)\.spec\.ts/,
       use: { ...devices['Pixel 7'], viewport: { width: 390, height: 844 } },
     },
+    // The site-wide guest cap, last: it uses up the day's guest messages.
+    { name: 'guest-cap', testMatch: /guest-cap\.spec\.ts/, dependencies: ['api', 'desktop', 'phone'] },
   ],
   webServer: [
     {

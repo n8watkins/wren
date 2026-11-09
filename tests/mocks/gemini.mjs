@@ -7,6 +7,7 @@
 //   "mock:fail"         a 500 before any text
 //   anything about a heat pump: a realistic Markdown answer (for screenshots)
 // and on the key: one starting "bad-" gets Gemini's invalid-key answer.
+// It also stands in for Turnstile's siteverify (POST /siteverify).
 import { createServer } from 'node:http'
 
 const port = Number(process.env.MOCK_GEMINI_PORT ?? 3127)
@@ -52,6 +53,15 @@ createServer((req, res) => {
   let raw = ''
   req.on('data', (c) => (raw += c))
   req.on('end', () => {
+    // Turnstile's siteverify: Cloudflare's always-pass test widget token, or any
+    // token starting "test-ok" (API tests), passes; anything else fails.
+    if (req.url === '/siteverify') {
+      const token = raw.match(/name="response"\r\n\r\n([^\r]*)/)?.[1] ?? ''
+      const success = token === 'XXXX.DUMMY.TOKEN.XXXX' || token.startsWith('test-ok')
+      res.writeHead(200, { 'Content-Type': 'application/json' })
+      res.end(JSON.stringify({ success, 'error-codes': success ? [] : ['invalid-input-response'] }))
+      return
+    }
     if (!/:streamGenerateContent/.test(req.url ?? '')) {
       res.writeHead(404).end()
       return

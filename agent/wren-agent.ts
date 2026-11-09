@@ -14,15 +14,12 @@ import {
   type ChatMessage,
   type ChatSummary,
 } from './chats'
-import { GeminiError, streamReply } from './gemini'
+import { answerStream } from './answer-stream'
 import { chooseKey } from './keys'
 import { createMeterTable, giveBack, tryTake, used } from './meter'
-import { WREN_SYSTEM_PROMPT } from './persona'
 import type { ErrorCode } from '../lib/errors'
-import { DAILY_IP_LIMITS, DAILY_LIMITS, nextUtcMidnight, utcDay, type UsageSnapshot } from '../lib/limits'
-import { log } from '../lib/log'
+import { DAILY_IP_LIMITS, DAILY_LIMITS, GUEST_LIMITS, nextUtcMidnight, utcDay, type UsageSnapshot } from '../lib/limits'
 import { optionalSetting } from '../lib/secrets'
-import type { ChatStreamEvent } from '../lib/stream-events'
 
 /** What the API route hands over after verifying the session and the body. */
 interface ChatTurnRequest {
@@ -35,12 +32,19 @@ interface ChatTurnRequest {
   ip: string
 }
 
+interface GuestTurnRequest {
+  text: string
+  /** The guest's earlier turns, from their tab (schema-checked and size-capped by the route). */
+  history: { role: 'user' | 'model'; text: string }[]
+  userKey?: string
+  ip: string
+  /** GUEST_SITE_DAILY_CAP. */
+  siteCap: number
+}
+
 type ChatTurnResult =
   | { ok: true; stream: ReadableStream<Uint8Array> }
   | { ok: false; code: ErrorCode }
-
-/** How often a partial answer is saved while it streams. */
-const SAVE_EVERY_MS = 1_000
 
 /**
  * One agent per signed-in person, named by their verified user id
@@ -146,81 +150,99 @@ export class WrenAgent extends Agent<Cloudflare.Env> {
     const controller = new AbortController()
     this.inFlight.set(chat.id, controller)
 
-    const chatRef = chat
-    const usage = keySource === 'demo' ? this.usage() : null
-    const model = this.env.GEMINI_MODEL
-    const baseUrl = optionalSetting(this.env, 'GEMINI_BASE_URL')
-    const encoder = new TextEncoder()
-    const started = Date.now()
-
-    const stream = new ReadableStream<Uint8Array>({
-      start: async (out) => {
-        const send = (event: ChatStreamEvent) => {
-          try {
-            out.enqueue(encoder.encode(`${JSON.stringify(event)}\n`))
-          } catch {
-            // The reader is gone (cancelled); the answer is still saved.
-          }
-        }
-        send({
-          t: 'start',
-          chat: chatRef,
-          userMessage,
-          messageId: answer.id,
-          keySource,
-          usage,
-        })
-        let text = ''
-        let savedAt = Date.now()
-        try {
-          for await (const chunk of streamReply({
-            apiKey,
-            keySource,
-            model,
-            systemPrompt: WREN_SYSTEM_PROMPT,
-            history,
-            signal: controller.signal,
-            baseUrl,
-          })) {
-            text += chunk
-            send({ t: 'delta', text: chunk })
-            if (Date.now() - savedAt > SAVE_EVERY_MS) {
-              updateMessage(sql, answer.id, text, 'stopped')
-              savedAt = Date.now()
-            }
-          }
-          const status = controller.signal.aborted ? 'stopped' : 'done'
-          if (text) updateMessage(sql, answer.id, text, status)
-          else sql.exec('DELETE FROM messages WHERE id = ?', answer.id)
-          send({ t: 'done', status })
-          log.info('chat.answer', { status: 200, chars: text.length, ms: Date.now() - started, model, keySource })
-        } catch (error) {
-          const code = error instanceof GeminiError ? error.code : 'upstream_error'
-          if (text) {
-            updateMessage(sql, answer.id, text, 'error')
-          } else {
-            sql.exec('DELETE FROM messages WHERE id = ?', answer.id)
-            if (code !== 'user_key_invalid' && code !== 'user_key_quota') await refund()
-          }
-          send({ t: 'error', code })
-          log.warn('chat.error', {
-            code,
-            model,
-            keySource,
-            upstreamStatus: error instanceof GeminiError ? error.upstreamStatus : undefined,
-          })
-        } finally {
-          this.inFlight.delete(chatRef.id)
-          try {
-            out.close()
-          } catch {
-            // Already cancelled.
-          }
-        }
+    const chatId = chat.id
+    const stream = answerStream({
+      start: { t: 'start', chat, userMessage, messageId: answer.id, keySource, usage: keySource === 'demo' ? this.usage() : null },
+      apiKey,
+      keySource,
+      model: this.env.GEMINI_MODEL,
+      history,
+      baseUrl: optionalSetting(this.env, 'GEMINI_BASE_URL'),
+      controller,
+      save: (text, status) => {
+        if (status === 'partial') updateMessage(sql, answer.id, text, 'stopped')
+        else if (text) updateMessage(sql, answer.id, text, status)
+        else sql.exec('DELETE FROM messages WHERE id = ?', answer.id)
       },
-      // Closing the tab or pressing Stop ends the answer; what was written is kept.
-      cancel: () => controller.abort(),
+      refund,
+      finish: () => this.inFlight.delete(chatId),
     })
     return { ok: true, stream }
+  }
+
+  /**
+   * A guest's message (an agent named `guest:<id>` from the signed guest
+   * cookie, lib/server/agent.ts). Nothing is saved: the conversation lives in
+   * the guest's tab and comes with each message, size-capped. Only the
+   * guest's daily count is kept here.
+   */
+  async guestTurn(request: GuestTurnRequest): Promise<ChatTurnResult> {
+    const sql = this.db
+    const key = chooseKey(request.userKey, optionalSetting(this.env, 'GEMINI_API_KEY'))
+    if (!key) return { ok: false, code: 'demo_unavailable' }
+    const { apiKey, keySource } = key
+
+    const day = utcDay()
+    const network = this.env.DAILY_COUNTER.getByName(`ip:${request.ip}`)
+    const site = this.env.DAILY_COUNTER.getByName('site:guest')
+    if (keySource === 'demo') {
+      if (!tryTake(sql, day, 'guestChat', GUEST_LIMITS.chat)) return { ok: false, code: 'daily_limit_guest' }
+      if (!(await network.take('guestChat', GUEST_LIMITS.perIp))) {
+        giveBack(sql, day, 'guestChat')
+        return { ok: false, code: 'daily_limit_guest_ip' }
+      }
+      if (!(await site.take('guestChat', request.siteCap))) {
+        giveBack(sql, day, 'guestChat')
+        await network.giveBack('guestChat')
+        return { ok: false, code: 'guest_site_cap' }
+      }
+    }
+    const refund = async () => {
+      if (keySource !== 'demo') return
+      giveBack(sql, day, 'guestChat')
+      await Promise.all([network.giveBack('guestChat'), site.giveBack('guestChat')])
+    }
+
+    const now = Date.now()
+    const history = historyForModel([
+      ...request.history.map((turn, i) => ({ id: String(i), role: turn.role, content: turn.text, status: 'done' as const, createdAt: now })),
+      { id: 'next', role: 'user', content: request.text, status: 'done', createdAt: now },
+    ])
+    const userMessage: ChatMessage = { id: crypto.randomUUID(), role: 'user', content: request.text, status: 'done', createdAt: now }
+    const usage: UsageSnapshot = {
+      chat: { used: used(sql, day, 'guestChat'), limit: GUEST_LIMITS.chat },
+      voiceMinutes: { used: 0, limit: 0 },
+      research: { used: 0, limit: 0 },
+      resetsAt: nextUtcMidnight(),
+    }
+    const stream = answerStream({
+      start: {
+        t: 'start',
+        chat: { id: 'guest', title: titleFrom(request.history[0]?.text ?? request.text), updatedAt: now },
+        userMessage,
+        messageId: crypto.randomUUID(),
+        keySource,
+        usage: keySource === 'demo' ? usage : null,
+      },
+      apiKey,
+      keySource,
+      model: this.env.GEMINI_MODEL,
+      history,
+      baseUrl: optionalSetting(this.env, 'GEMINI_BASE_URL'),
+      controller: new AbortController(),
+      refund,
+      finish: () => undefined,
+    })
+    return { ok: true, stream }
+  }
+
+  guestUsage(): UsageSnapshot {
+    const day = utcDay()
+    return {
+      chat: { used: used(this.db, day, 'guestChat'), limit: GUEST_LIMITS.chat },
+      voiceMinutes: { used: 0, limit: 0 },
+      research: { used: 0, limit: 0 },
+      resetsAt: nextUtcMidnight(),
+    }
   }
 }

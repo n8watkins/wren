@@ -41,6 +41,7 @@ export const api = {
     request<{ chat: ChatSummary; messages: ChatMessage[]; answering: boolean }>(`/api/chats/${encodeURIComponent(id)}`),
   deleteChat: (id: string) => request<{ deleted: boolean }>(`/api/chats/${encodeURIComponent(id)}`, { method: 'DELETE' }),
   usage: () => request<UsageSnapshot>('/api/usage'),
+  guestUsage: () => request<UsageSnapshot>('/api/guest/usage'),
   stop: (chatId: string) =>
     request<{ stopped: boolean }>('/api/chat/stop', {
       method: 'POST',
@@ -73,6 +74,61 @@ export async function* sendMessage(options: SendOptions): AsyncGenerator<ChatStr
   } catch {
     if (options.signal.aborted) return
     throw new ApiError('network', "Couldn't reach Wren. Check your connection and try again.")
+  }
+  if (!response.ok || !response.body) throw await failure(response)
+  try {
+    yield* readChatStream(response.body)
+  } catch {
+    if (options.signal.aborted) return
+    throw new ApiError('network', 'The connection dropped before the answer finished.')
+  }
+}
+
+export interface GuestSendOptions {
+  text: string
+  history: { role: 'user' | 'model'; text: string }[]
+  userKey?: string | null
+  signal: AbortSignal
+  /** Runs the human check and returns a Turnstile token, when the server asks for one. */
+  humanCheck: () => Promise<string>
+}
+
+async function postGuest(options: GuestSendOptions): Promise<Response> {
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+  if (options.userKey) headers['X-Gemini-Key'] = options.userKey
+  try {
+    return await fetch('/api/guest/chat', {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers,
+      body: JSON.stringify({ text: options.text, history: options.history }),
+      signal: options.signal,
+    })
+  } catch {
+    throw new ApiError('network', "Couldn't reach Wren. Check your connection and try again.")
+  }
+}
+
+/**
+ * A guest's message. Without a guest cookie the server answers
+ * guest_required: the human check runs, /api/guest/start sets the cookie, and
+ * the message is sent once more.
+ */
+export async function* sendGuestMessage(options: GuestSendOptions): AsyncGenerator<ChatStreamEvent> {
+  let response = await postGuest(options)
+  if (response.status === 401) {
+    let token: string
+    try {
+      token = await options.humanCheck()
+    } catch {
+      throw new ApiError('turnstile_failed', errorMessage('turnstile_failed'))
+    }
+    await request<{ ok: true }>('/api/guest/start', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token }),
+    })
+    response = await postGuest(options)
   }
   if (!response.ok || !response.body) throw await failure(response)
   try {

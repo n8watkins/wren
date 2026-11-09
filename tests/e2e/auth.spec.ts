@@ -1,15 +1,18 @@
 import { expect, test } from './fixtures'
-import { composer, isPhone, latestLink, newEmail, skipIntro } from './helpers'
+import { isPhone, latestLink, meterChat, newEmail, skipIntro } from './helpers'
 
-test('a guest is asked to sign in before the first message, then signs in by email', async ({ page }) => {
+test('sign in by email from the sign-in modal', async ({ page }) => {
   await skipIntro(page)
   await page.goto('/')
-  await composer(page).fill('Hello there')
-  await page.locator(isPhone(page) ? '.mcomp' : '.composer').getByTestId('send').click()
+  if (isPhone(page)) {
+    await page.getByTestId('title-menu').click()
+    await page.locator('.mmenu .row').getByRole('button', { name: 'Sign in' }).click()
+  } else {
+    await page.locator('.side').getByTestId('open-sign-in').click()
+  }
 
   const dialog = page.getByTestId('sign-in')
   await expect(dialog).toBeVisible()
-  await expect(dialog).toContainText('Sign in to start chatting')
   // GitHub isn't configured in tests: the button says so instead of failing later.
   await expect(dialog.getByTestId('github-sign-in')).toBeDisabled()
   await expect(dialog).toContainText("GitHub sign-in isn’t set up on this preview yet")
@@ -22,6 +25,7 @@ test('a guest is asked to sign in before the first message, then signs in by ema
   await page.goto(await latestLink(email))
   if (isPhone(page)) await page.getByTestId('title-menu').click()
   await expect(page.locator(isPhone(page) ? '.mmenu' : '.side').getByTestId('who')).toContainText(email)
+  await expect(await meterChat(page)).toHaveText('0/50')
 })
 
 test('a sign-in link works once', async ({ page, baseURL }) => {

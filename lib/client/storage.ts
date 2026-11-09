@@ -16,6 +16,9 @@ export const KEYS = {
   theme: 'wren:theme',
 } as const
 
+/** A guest's chat: only in this tab (sessionStorage), never on the server. */
+export const GUEST_CHAT_KEY = 'wren:guest-chat'
+
 const CHANGE = 'wren:local-change'
 
 function readLocal(key: string): string | null {
@@ -51,5 +54,32 @@ export function useLocalSetting(key: string, serverValue: string | null = null):
     subscribe,
     () => readLocal(key),
     () => serverValue
+  )
+}
+
+function readSession(key: string): string | null {
+  try {
+    return window.sessionStorage.getItem(key)
+  } catch {
+    return null
+  }
+}
+
+export function writeSession(key: string, value: string | null): void {
+  try {
+    if (value === null) window.sessionStorage.removeItem(key)
+    else window.sessionStorage.setItem(key, value)
+  } catch {
+    // Storage unavailable: the chat lasts as long as the page.
+  }
+  window.dispatchEvent(new Event(CHANGE))
+}
+
+/** A sessionStorage value for this tab; null while rendering on the server. */
+export function useSessionSetting(key: string): string | null {
+  return useSyncExternalStore(
+    subscribe,
+    () => readSession(key),
+    () => null
   )
 }

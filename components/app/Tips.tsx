@@ -17,7 +17,7 @@ const TIPS: { id: string; explainer: ExplainerId; text: string; side: 'above' | 
   { id: 'mic', explainer: 'mic', text: 'The mic is for talking instead of typing. Voice arrives in the next update.', side: 'above' },
   { id: 'res', explainer: 'research', text: 'Research will read the web for you and cite only the pages it opened.', side: 'above' },
   { id: 'mem', explainer: 'memory', text: 'Notes, files and links you add here will be quoted in answers.', side: 'right' },
-  { id: 'meter', explainer: 'meter', text: "This is today's share of the demo key. Add your own key to remove the limit.", side: 'above' },
+  { id: 'meter', explainer: 'meter', text: "This is today's share of the demo key. Sign in for 10x more messages, or add your own key to remove the limit.", side: 'above' },
 ]
 
 function visibleTarget(id: string): HTMLElement | null {

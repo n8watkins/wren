@@ -71,3 +71,20 @@ export async function meterChat(page: Page) {
   }
   return page.locator('.side').getByTestId('meter-chat')
 }
+
+/** Starts a guest session the way the browser does after Turnstile (the mock siteverify accepts "test-ok…"). */
+export async function startGuest(request: APIRequestContext): Promise<void> {
+  const response = await request.post('/api/guest/start', { data: { token: 'test-ok' } })
+  expect(response.ok()).toBe(true)
+}
+
+/** A guest message through the API; the parsed NDJSON events, or the error answer. */
+export async function guestSay(request: APIRequestContext, text: string, history: { role: string; text: string }[] = []) {
+  const response = await request.post('/api/guest/chat', { data: { text, history } })
+  if (!response.ok()) return { status: response.status(), error: (await response.json()).error as string, events: [] }
+  const events = (await response.text())
+    .trim()
+    .split('\n')
+    .map((line) => JSON.parse(line))
+  return { status: response.status(), error: null, events }
+}
