@@ -49,15 +49,14 @@ function applyTheme(theme: Theme) {
   else document.documentElement.setAttribute('data-theme', theme)
 }
 
-function parseTips(raw: string | null): { active: boolean; dismissed: string[] } {
+/** The tips tour's saved state: whether it is running, and which step it is on. */
+function parseTips(raw: string | null): { active: boolean; step: number } {
   try {
-    const saved = JSON.parse(raw ?? 'null') as { active?: unknown; dismissed?: unknown } | null
-    return {
-      active: saved?.active === true,
-      dismissed: Array.isArray(saved?.dismissed) ? saved.dismissed.filter((d): d is string => typeof d === 'string') : [],
-    }
+    const saved = JSON.parse(raw ?? 'null') as { active?: unknown; step?: unknown } | null
+    const step = typeof saved?.step === 'number' && Number.isInteger(saved.step) && saved.step >= 0 ? saved.step : 0
+    return { active: saved?.active === true, step }
   } catch {
-    return { active: false, dismissed: [] }
+    return { active: false, step: 0 }
   }
 }
 
@@ -109,7 +108,7 @@ export function WrenApp({ person, github, initialChats, initialUsage }: WrenAppP
     writeLocal(KEYS.theme, next === 'auto' ? null : next)
   }
 
-  const saveTips = (next: { active: boolean; dismissed: string[] }) => {
+  const saveTips = (next: { active: boolean; step: number }) => {
     writeLocal(KEYS.tips, JSON.stringify(next))
   }
 
@@ -424,7 +423,7 @@ export function WrenApp({ person, github, initialChats, initialUsage }: WrenAppP
         onClose={closeHow}
         onShowAround={() => {
           closeHow()
-          saveTips({ active: true, dismissed: [] })
+          saveTips({ active: true, step: 0 })
         }}
       />
       <SignInDialog
@@ -442,8 +441,9 @@ export function WrenApp({ person, github, initialChats, initialUsage }: WrenAppP
       />
       <Tips
         active={tips.active && modal === null && !menuOpen && !firstVisit}
-        dismissed={tips.dismissed}
-        onDismiss={(id) => saveTips({ active: true, dismissed: [...tips.dismissed, id] })}
+        step={tips.step}
+        onStep={(step) => saveTips({ active: true, step })}
+        onClose={() => saveTips({ active: false, step: 0 })}
         onExplain={explain}
       />
     </div>
