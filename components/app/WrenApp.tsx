@@ -98,6 +98,9 @@ export function WrenApp({ person, github, initialChats, initialUsage }: WrenAppP
   const tips = parseTips(useLocalSetting(KEYS.tips))
   const abortRef = useRef<AbortController | null>(null)
   const streamChatRef = useRef<string | null>(null)
+  // A chat this tab just created, until its address (/chat/<id>) is committed:
+  // a fast answer can end before Next applies the address change.
+  const newChatRef = useRef<string | null>(null)
   const currentChatRef = useRef<string | null>(chatId)
   useEffect(() => {
     currentChatRef.current = chatId
@@ -116,12 +119,13 @@ export function WrenApp({ person, github, initialChats, initialUsage }: WrenAppP
   useEffect(() => {
     if (!person || place !== 'chat') return
     if (chatId === null) {
-      if (streamChatRef.current === null) {
+      if (streamChatRef.current === null && newChatRef.current === null) {
         setMessages([])
         setLoadedChatId(null)
       }
       return
     }
+    if (newChatRef.current === chatId) newChatRef.current = null
     if (chatId === loadedChatId || chatId === streamChatRef.current) return
     let cancelled = false
     setLoading(true)
@@ -150,11 +154,13 @@ export function WrenApp({ person, github, initialChats, initialUsage }: WrenAppP
   }, [person])
 
   const openChat = (id: string) => {
+    newChatRef.current = null
     setError(null)
     router.push(`/chat/${id}`)
   }
 
   const newChat = () => {
+    newChatRef.current = null
     setError(null)
     setDraft('')
     if (!streaming) {
@@ -202,7 +208,10 @@ export function WrenApp({ person, github, initialChats, initialUsage }: WrenAppP
           setMessages((list) => list.map((m) => (m.id.startsWith('pending-') ? event.userMessage : m)))
           setChats((list) => [{ ...event.chat, updatedAt: Date.now() }, ...list.filter((c) => c.id !== event.chat.id)])
           if (event.usage) setUsage(event.usage)
-          if (targetChat === null) window.history.replaceState(null, '', `/chat/${event.chat.id}`)
+          if (targetChat === null) {
+            newChatRef.current = event.chat.id
+            window.history.replaceState(null, '', `/chat/${event.chat.id}`)
+          }
         } else if (event.t === 'delta') {
           text += event.text
           setStreaming((s) => (s ? { ...s, text } : s))

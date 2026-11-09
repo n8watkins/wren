@@ -1894,13 +1894,20 @@ dialog.dialog.narrow {
   font: 500 10.5px/1 var(--f-mono);
   color: var(--tip-2);
 }
+.coach.up::after {
+  top: -6px;
+  left: var(--ax, 24px);
+}
 .coach .ca {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 6px;
   margin-top: 10px;
   padding-top: 9px;
   border-top: 1px solid color-mix(in srgb, var(--tip-fg) 14%, transparent);
+}
+.coach .ca .sp {
+  flex: 1;
 }
 .coach .ca .skip {
   border: 0;
@@ -1913,26 +1920,65 @@ dialog.dialog.narrow {
 .coach .ca .skip:hover {
   color: var(--tip-fg);
 }
+.coach .ca .of {
+  font: 500 10.5px/1 var(--f-mono);
+  color: var(--tip-2);
+  white-space: nowrap;
+  min-width: 3.4em;
+  text-align: center;
+}
+.coach .ca .prev,
 .coach .ca .next {
-  margin-left: auto;
-  display: inline-flex;
-  align-items: center;
-  gap: 2px;
-  border: 0;
+  height: 30px;
+  min-width: 30px;
+  display: inline-grid;
+  place-items: center;
   border-radius: 8px;
-  padding: 5px 8px 5px 11px;
-  background: var(--tip-fg);
-  color: var(--tip-bg);
   font-size: 12.5px;
   font-weight: 600;
 }
-.coach .ca .next:only-child,
-.coach .ca .next:not(:has(svg)) {
-  padding-right: 11px;
+.coach .ca .prev {
+  border: 1px solid color-mix(in srgb, var(--tip-fg) 28%, transparent);
+  background: none;
+  color: var(--tip-fg);
 }
-.coach .ca .next svg {
-  width: 15px;
-  height: 15px;
+.coach .ca .prev:disabled {
+  opacity: 0.35;
+}
+.coach .ca .next {
+  border: 0;
+  padding: 0 10px;
+  background: var(--tip-fg);
+  color: var(--tip-bg);
+}
+.coach .ca svg {
+  width: 16px;
+  height: 16px;
+}
+@media (max-width: 860px) {
+  .coach {
+    width: min(320px, calc(100vw - 16px));
+    font-size: 14px;
+  }
+  .coach .ca .prev,
+  .coach .ca .next {
+    height: 44px;
+    min-width: 44px;
+    border-radius: 12px;
+    font-size: 14px;
+  }
+  .coach .ca .next {
+    padding: 0 14px;
+  }
+  .coach .ca .skip {
+    min-height: 44px;
+    font-size: 13px;
+  }
+  .coach .cx {
+    width: 36px;
+    height: 36px;
+    margin: -8px -8px 0 0;
+  }
 }
 .coach button:focus-visible {
   outline-color: var(--tip-link);
