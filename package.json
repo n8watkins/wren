@@ -6,7 +6,7 @@
     "dev": "next dev -p 3120",
     "build": "next build",
     "build:worker": "opennextjs-cloudflare build",
-    "preview": "opennextjs-cloudflare build && npm run db:migrate:local && wrangler dev --port 3120",
+    "preview": "opennextjs-cloudflare build && npm run db:migrate:local && wrangler dev --port 3120 --local-upstream localhost:3120 --upstream-protocol http",
     "deploy": "opennextjs-cloudflare build && opennextjs-cloudflare deploy",
     "check:deploy": "wrangler deploy --dry-run",
     "cf-typegen": "wrangler types --env-interface CloudflareEnv --strict-vars=false cloudflare-env.d.ts",

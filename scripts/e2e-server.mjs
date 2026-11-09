@@ -24,6 +24,8 @@ config.main = '../../worker/index.ts'
 config.assets.directory = '../../.open-next/assets'
 config.d1_databases[0].migrations_dir = '../../migrations'
 for (const limiter of config.ratelimits) limiter.simple.limit = 10_000
+// The custom domain would make wrangler dev rewrite every request to it.
+delete config.routes
 config.vars = {
   ...config.vars,
   APP_ENV: 'test',
