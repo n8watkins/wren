@@ -2,7 +2,7 @@ import type { Page } from '@playwright/test'
 import { expect, test } from './fixtures'
 import { composer, isPhone } from './helpers'
 
-/** The tips tour: a guided sequence with Next/Done, a step count, Skip tips, and X or Esc to end it. */
+/** The tips tour: Previous and Next, a step counter, Skip tour and Done; X or Esc ends it. */
 
 // A phone has no sidebar, so the Memory "+" and the meter aren't on screen: two tips instead of four.
 const ids = (page: Page) => (isPhone(page) ? ['mic', 'res'] : ['mic', 'res', 'mem', 'meter'])
@@ -20,9 +20,20 @@ test('Next walks through every tip and Done ends the tour', async ({ page }) => 
   for (const [i, id] of steps.entries()) {
     await expect(tip).toHaveAttribute('data-tip-id', id)
     await expect(tip.getByTestId('tip-step')).toHaveText(`${i + 1} of ${steps.length}`)
-    await expect(tip.getByRole('button', { name: 'Skip tips' })).toBeVisible()
+    await expect(tip.getByRole('button', { name: 'Skip tour' })).toBeVisible()
     const next = tip.getByTestId('tip-next')
-    await expect(next).toHaveText(i === steps.length - 1 ? 'Done' : 'Next')
+    await expect(next).toHaveAccessibleName(i === steps.length - 1 ? 'Done' : 'Next tip')
+    if (i === steps.length - 1) await expect(next).toHaveText('Done')
+    await expect(tip.getByTestId('tip-prev')).toBeEnabled({ enabled: i > 0 })
+
+    // Phones get thumb-sized buttons.
+    if (isPhone(page)) {
+      for (const button of [next, tip.getByTestId('tip-prev')]) {
+        const size = (await button.boundingBox())!
+        expect(size.height).toBeGreaterThanOrEqual(44)
+        expect(size.width).toBeGreaterThanOrEqual(44)
+      }
+    }
 
     // The tip sits fully on screen.
     const box = (await tip.boundingBox())!
@@ -30,12 +41,30 @@ test('Next walks through every tip and Done ends the tour', async ({ page }) => 
     expect(box.x).toBeGreaterThanOrEqual(0)
     expect(box.x + box.width).toBeLessThanOrEqual(viewport.width)
     expect(box.y).toBeGreaterThanOrEqual(0)
+    expect(box.y + box.height).toBeLessThanOrEqual(viewport.height)
     await next.click()
   }
   await expect(tip).toHaveCount(0)
   await page.reload()
   await expect(page.getByTestId('welcome')).toBeVisible()
   await expect(tip).toHaveCount(0)
+})
+
+test('Previous and the Left arrow go back', async ({ page }) => {
+  await startTour(page)
+  const tip = page.getByTestId('tip')
+  await tip.getByTestId('tip-next').click()
+  await expect(tip).toHaveAttribute('data-tip-id', 'res')
+  await tip.getByTestId('tip-prev').click()
+  await expect(tip).toHaveAttribute('data-tip-id', 'mic')
+  await expect(tip.getByTestId('tip-step')).toHaveText(`1 of ${ids(page).length}`)
+  await page.keyboard.press('ArrowRight')
+  await expect(tip).toHaveAttribute('data-tip-id', 'res')
+  await page.keyboard.press('ArrowLeft')
+  await expect(tip).toHaveAttribute('data-tip-id', 'mic')
+  // Nothing before the first step.
+  await page.keyboard.press('ArrowLeft')
+  await expect(tip).toHaveAttribute('data-tip-id', 'mic')
 })
 
 test('Enter and the Right arrow go to the next tip; typing in the composer does not', async ({ page }) => {
@@ -57,9 +86,9 @@ test('Enter and the Right arrow go to the next tip; typing in the composer does 
 })
 
 for (const [how, end] of [
-  ['X', (page: Page) => page.getByTestId('tip').getByRole('button', { name: 'Close tips' }).click()],
+  ['X', (page: Page) => page.getByTestId('tip').getByRole('button', { name: 'Close tour' }).click()],
   ['Esc', (page: Page) => page.keyboard.press('Escape')],
-  ['Skip tips', (page: Page) => page.getByTestId('tip').getByRole('button', { name: 'Skip tips' }).click()],
+  ['Skip tour', (page: Page) => page.getByTestId('tip').getByRole('button', { name: 'Skip tour' }).click()],
 ] as const) {
   test(`${how} ends the whole tour instead of advancing`, async ({ page }) => {
     await startTour(page)
