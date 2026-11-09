@@ -28,6 +28,8 @@ config.d1_databases[0].migrations_dir = '../../migrations'
 for (const limiter of config.ratelimits) limiter.simple.limit = 10_000
 // The custom domain would make wrangler dev rewrite every request to it.
 delete config.routes
+// Vectorize has no local mode: memory keeps its vectors in the agent's SQLite.
+delete config.vectorize
 config.vars = {
   ...config.vars,
   APP_ENV: 'test',
@@ -35,6 +37,7 @@ config.vars = {
   EMAIL_TRANSPORT: 'outbox',
   GEMINI_BASE_URL: `http://${host}:${mockPort}`,
   GEMINI_API_KEY: 'test-demo-key',
+  MEMORY_VECTORS: 'local',
   BETTER_AUTH_SECRET: 'e2e-only-secret-not-used-anywhere-else-0123456789',
   // Cloudflare's always-pass Turnstile test keys; siteverify is the mock.
   TURNSTILE_SITE_KEY: '1x00000000000000000000AA',

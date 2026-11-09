@@ -13,6 +13,8 @@ export type OptionalSetting =
   | 'TURNSTILE_VERIFY_URL'
   /** Test runs only: the local mock of the Gemini API. /api/health fails if a production deploy has it. */
   | 'GEMINI_BASE_URL'
+  /** Local and test runs only: "local" keeps memory's search vectors in the agent's SQLite (Vectorize has no local mode). /api/health fails if a production deploy has it. */
+  | 'MEMORY_VECTORS'
 
 export function optionalSetting(env: object, name: OptionalSetting): string | undefined {
   const value = (env as Record<string, unknown>)[name]
