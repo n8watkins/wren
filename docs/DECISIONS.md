@@ -6,7 +6,7 @@ Read this before changing product, design or workflow, and add every new decisio
 ## Product
 
 - **Wren is a new product** (owner, 2026-11-08 and 2026-11-09).
-  It is a portfolio demo that shows a ChatGPT-like assistant done well: one chat where typing and talking are always both available, Research as an action from chat, and Memory as a library you add to and browse.
+  It is a portfolio demo that shows a ChatGPT-like assistant done well: one chat where typing and talking are always both available, Research as an action from chat, and Memory as a library that Wren adds to on its own and you add to with a button, browse and edit.
   Public copy presents it as its own product; it is never described as a merge of earlier projects.
 - **Name and mark**: Wren, with a small animated wren as the icon (owner, 2026-11-09).
   The mark moves only to say what Wren is doing: idle, thinking, listening, talking (`components/WrenMark.tsx`).
@@ -15,6 +15,9 @@ Read this before changing product, design or workflow, and add every new decisio
 - **No landing page**: the app is the first screen, with a "How Wren works" modal on the first visit that "?" reopens, and in-context tips.
 - **Tips are a short guided tour** (owner, 2026-11-09): a toolbar with Skip tour, Previous (←), a "2 of 4" counter and Next (→), which reads Done on the last step; X, Esc and Skip tour end the whole tour; the arrow keys move back and forward and Enter is Next; on phones the buttons are at least 44 px and the tip stays on screen. "Show me around" in the "?" dialog starts it again.
 - **Phases**: 1 foundation and chat (this), 2 voice, 3 research, 4 memory, then launch.
+- **Memory saves both ways** (owner, 2026-11-09): Wren saves short, lasting facts from a conversation on its own (preferences, projects, recurring topics), and a "Save to Memory" button saves anything you choose.
+  Every save Wren makes on its own shows a "Saved to Memory · Undo" line in the chat, so nothing is saved silently, and the Memory library lists, edits and deletes everything.
+  Guests get no memory, as nothing of theirs is saved past the tab.
   Controls for later phases are visible now and say "coming in the next update"; none of them pretend to work.
 
 ## Sign-in
@@ -50,7 +53,9 @@ Read this before changing product, design or workflow, and add every new decisio
 - **Streaming**: the chat answer streams as newline-delimited JSON from the agent through the route to the browser.
   Closing the tab or pressing Stop ends the answer and keeps what was written.
   Resumable streams arrive with voice, which moves chat onto the agent's WebSocket.
-- **Gemini** through `@google/genai`, model `gemini-3.8-flash` (Google's recommended default for everyday apps as of November 2026), set in `wrangler.jsonc`.
+- **Gemini** through `@google/genai`: `gemini-3.5-flash-lite`, with `gemini-3.1-flash-lite` as the backup (owner, 2026-11-09), set in `wrangler.jsonc` (`GEMINI_MODEL`, `GEMINI_FALLBACK_MODEL`).
+  The backup is tried once when the first model fails or sends no text within 20 s; a rejected key is never retried, and an answer that already started is never restarted (`agent/gemini.ts`).
+  It replaced `gemini-3.8-flash`, which stopped answering on the live site (no response within 40 s) while both lite models answered in about a second.
 - **The demo budget**: 50 messages, 10 voice minutes and 3 research runs per person per day, reset at midnight UTC (owner placeholders, 2026-11-09), counted in the person's agent, plus 150 messages per IP per day (`lib/limits.ts`).
   Burst limits per user and per IP use Workers rate limiting.
 - **Bring your own key**: kept only in the browser and sent per request in a header; never stored or logged.
