@@ -58,8 +58,9 @@ for (const size of PHONES) {
       const how = page.getByTestId('how-it-works')
       await expect(how).toBeVisible()
       await noHorizontalScroll(page)
-      // Focus starts on "Start chatting", not on the close button.
-      await expect(how.getByTestId('start-chatting')).toBeFocused()
+      // Focus starts on the sheet's content: no ring on the close button.
+      await expect(how.getByRole('button', { name: 'Close' })).not.toBeFocused()
+      expect(await how.evaluate((dialog) => dialog.querySelector('.inner') === document.activeElement)).toBe(true)
       expect(await smallTargets(page, how)).toEqual([])
       await how.getByTestId('start-chatting').click()
       await expect(how).toBeHidden()

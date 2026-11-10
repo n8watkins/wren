@@ -105,7 +105,7 @@ export function HowItWorksDialog({
         <button type="button" className="btn" onClick={onShowAround}>
           Show me around
         </button>
-        <button type="button" className="btn pri" onClick={onClose} data-testid="start-chatting" data-autofocus>
+        <button type="button" className="btn pri" onClick={onClose} data-testid="start-chatting">
           Start chatting
         </button>
       </div>
@@ -340,7 +340,7 @@ export function ExplainerDialog({ id, onClose }: { id: ExplainerId | null; onClo
     <Dialog open={id !== null} onClose={onClose} label="How this works" narrow testId="explainer">
       {id && <ExplainerBody id={id} />}
       <div className="mfoot">
-        <button type="button" className="btn pri" onClick={onClose} data-autofocus>
+        <button type="button" className="btn pri" onClick={onClose}>
           Got it
         </button>
       </div>
@@ -370,7 +370,7 @@ export function ConfirmDeleteDialog({
       </div>
       <div className="mfoot">
         <span className="note" />
-        <button type="button" className="btn" onClick={onCancel} data-autofocus>
+        <button type="button" className="btn" onClick={onCancel}>
           Keep it
         </button>
         <button type="button" className="btn pri" onClick={onConfirm} data-testid="confirm-delete-yes">
