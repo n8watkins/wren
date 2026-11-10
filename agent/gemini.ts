@@ -523,7 +523,8 @@ export async function connectLive(options: LiveOptions, events: LiveEvents): Pro
         model: `models/${options.model}`,
         generationConfig: { responseModalities: ['AUDIO'] },
         systemInstruction: { parts: [{ text: options.systemPrompt }] },
-        inputAudioTranscription: {},
+        // "Wren" is not a common word; without the hint it is often heard as another name.
+        inputAudioTranscription: { customVocabulary: ['Wren'] },
         outputAudioTranscription: {},
         // Keeps a long conversation inside the model's context instead of ending the session.
         contextWindowCompression: { slidingWindow: {} },

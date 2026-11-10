@@ -41,6 +41,9 @@ const CLIENT_PROBLEMS = {
   connection_lost: 'The voice connection dropped. Tap the mic to start again.',
 } as const
 
+/** Ticket age past which a new one is fetched before opening the socket (they last 60 s). */
+const TICKET_FRESH_MS = 40_000
+
 /** The last 3 s of speech (100 ms chunks) is held while the session connects. */
 const EARLY_CHUNKS = 30
 
@@ -127,6 +130,11 @@ export class VoiceSession {
     if (!navigator.mediaDevices?.getUserMedia || typeof AudioWorkletNode === 'undefined' || typeof WebSocket === 'undefined') {
       return this.finish({ message: CLIENT_PROBLEMS.unsupported, signIn: false })
     }
+    // Minutes and sign-in first, so nobody is asked for the mic only to be told no.
+    let ticket = await this.ticket(options)
+    if (ticket === null || this.done) return this.release()
+    const ticketAt = Date.now()
+
     try {
       this.stream = await navigator.mediaDevices.getUserMedia({
         audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true, autoGainControl: true },
@@ -137,21 +145,11 @@ export class VoiceSession {
       return this.finish({ message: missing ? CLIENT_PROBLEMS.mic_missing : CLIENT_PROBLEMS.mic_denied, signIn: false })
     }
     if (this.done) return this.release()
-
-    let ticket: string
-    try {
-      ;({ ticket } = await request<{ ticket: string }>('/api/voice/ticket', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ chatId: options.chatId ?? undefined, ownKey: Boolean(options.userKey) }),
-      }))
-    } catch (failure) {
-      const code = failure instanceof ApiError ? failure.code : 'internal'
-      const message = failure instanceof ApiError ? failure.message : errorMessage('internal')
-      const signIn = code === 'unauthorized' || (isErrorCode(code) && SIGN_IN_FIXES.has(code))
-      return this.finish({ message: code === 'unauthorized' ? errorMessage('voice_sign_in') : message, signIn })
+    // A ticket lasts a minute; the browser's mic prompt may have taken most of it.
+    if (Date.now() - ticketAt > TICKET_FRESH_MS) {
+      ticket = await this.ticket(options)
+      if (ticket === null || this.done) return this.release()
     }
-    if (this.done) return this.release()
 
     try {
       this.context = new AudioContext({ latencyHint: 'interactive' })
@@ -198,6 +196,24 @@ export class VoiceSession {
     }
     socket.onclose = () => {
       if (!this.done) this.finish({ message: CLIENT_PROBLEMS.connection_lost, signIn: false })
+    }
+  }
+
+  /** A ticket for the voice socket, or null after telling the person why not. */
+  private async ticket(options: { chatId: string | null; userKey: string | null }): Promise<string | null> {
+    try {
+      const { ticket } = await request<{ ticket: string }>('/api/voice/ticket', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ chatId: options.chatId ?? undefined, ownKey: Boolean(options.userKey) }),
+      })
+      return ticket
+    } catch (failure) {
+      const code = failure instanceof ApiError ? failure.code : 'internal'
+      const message = failure instanceof ApiError ? failure.message : errorMessage('internal')
+      const signIn = code === 'unauthorized' || (isErrorCode(code) && SIGN_IN_FIXES.has(code))
+      this.finish({ message: code === 'unauthorized' ? errorMessage('voice_sign_in') : message, signIn })
+      return null
     }
   }
 

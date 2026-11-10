@@ -44,12 +44,7 @@ function Left({ left, ownKey }: { left: VoiceView['left']; ownKey: boolean }) {
 
 /** The listening view: what Wren is doing, the words so far, time left, and End. */
 export function VoicePanel({ view, onEnd }: { view: VoiceView; onEnd: () => void }) {
-  const hint =
-    view.status === 'connecting'
-      ? 'Opening the mic and connecting to Wren'
-      : view.status === 'talking'
-        ? 'Start talking to interrupt'
-        : 'Talk any time, or type below'
+  const hint = view.status === 'connecting' ? 'Opening the mic' : view.status === 'talking' ? 'Talk to interrupt' : 'Talk any time'
   return (
     <div className="voice" role="status" data-testid="voice-panel" data-status={view.status}>
       <span className="vmark" aria-hidden="true">
