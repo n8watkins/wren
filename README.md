@@ -15,7 +15,7 @@ Launch comes next.
 - One Durable Object agent per person (Cloudflare Agents SDK) holding their chats, memory and usage meter.
 - Vectorize (search by meaning, a namespace per person) and R2 (saved files) for Memory.
 - Better Auth on D1 for accounts and sessions.
-- Gemini through `@google/genai`; voice through Gemini Live (a WebSocket relayed by each person's agent); research searches with Tavily, with Gemini's Google Search as the backup.
+- Gemini through `@google/genai`; voice through Gemini Live (a WebSocket relayed by each person's agent); research searches with Tavily, its only search.
 
 ## Run it
 

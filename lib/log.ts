@@ -14,8 +14,8 @@ export interface LogFields {
   model?: string
   keySource?: 'demo' | 'user'
   upstreamStatus?: number
-  /** Which search service answered a research search. */
-  provider?: 'tavily' | 'google'
+  /** The search service a research search went to. */
+  provider?: 'tavily'
 }
 
 const ALLOWED = new Set<keyof LogFields>([

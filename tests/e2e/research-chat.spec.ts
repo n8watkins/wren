@@ -189,14 +189,18 @@ test('a network that used its runs is told so in the chat', async ({ page, baseU
   await expect(page.getByTestId('research-card')).toHaveCount(0)
 })
 
-test('with Tavily down it says Google Search took over, and a run that fails says why and doesn’t count', async ({ page, baseURL }) => {
+test('with Tavily out of credits the run stops, says so plainly and doesn’t count', async ({ page, baseURL }) => {
   await signIn(page, baseURL!)
   await research(page, 'mock:tavily-down which e-bike?')
   const card = page.getByTestId('research-card')
   await expect(card).toHaveAttribute('data-status', 'failed', { timeout: 30_000 })
   const failed = card.getByTestId('research-failed')
-  await expect(failed).toContainText('Stopped without a report. None of the searches found anything to read. This run doesn’t count against today’s 3.')
-  await expect(failed.getByTestId('research-searched')).toHaveText('Searched with Google Search (Tavily is out of credits)')
+  await expect(failed).toContainText(
+    'Stopped without a report. Tavily, the web search research uses, is out of credits right now. This run doesn’t count against today’s 3.'
+  )
+  // Tavily is the only search: nothing else searched.
+  await expect(failed.getByTestId('research-searched')).toHaveCount(0)
+  await expect(failed).not.toContainText('Google')
   await expect(failed.getByTestId('research-retry')).toBeVisible()
   await expect(await researchMeter(page)).toHaveText('0/3')
   await closeMeter(page)

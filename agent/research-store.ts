@@ -1,9 +1,7 @@
 import type { Sql } from './sql'
 import { RESEARCH_LIMITS } from '../lib/limits'
 import {
-  isBackupReason,
   isRunFailure,
-  type BackupReason,
   type RunDetail,
   type RunFailure,
   type RunSource,
@@ -49,9 +47,10 @@ export function createResearchTables(sql: Sql): void {
   )`)
   sql.exec('CREATE INDEX IF NOT EXISTS research_steps_by_run ON research_steps (run_id, seq)')
   // Added after the first runs: which service answered a search (2026-11-10).
+  // Databases from then may also have a backup_reason column, unused since
+  // Tavily became the only search; it stays, empty.
   const columns = new Set(sql.exec<{ name: string }>("SELECT name FROM pragma_table_info('research_steps')").toArray().map((c) => c.name))
   if (!columns.has('provider')) sql.exec('ALTER TABLE research_steps ADD COLUMN provider TEXT')
-  if (!columns.has('backup_reason')) sql.exec('ALTER TABLE research_steps ADD COLUMN backup_reason TEXT')
   sql.exec(`CREATE TABLE IF NOT EXISTS research_pages (
     run_id TEXT NOT NULL REFERENCES research_runs(id) ON DELETE CASCADE,
     page_key TEXT NOT NULL,
@@ -183,23 +182,26 @@ export function addStep(
     label: string
     detail?: string | null
     url?: string | null
-    /** For a search: which service answered it, and why the backup did. */
+    /** For a search: which service answered it. */
     provider?: SearchProvider
-    backupReason?: BackupReason | null
   },
   now = Date.now()
 ): void {
   sql.exec(
-    'INSERT INTO research_steps (run_id, kind, label, detail, url, provider, backup_reason, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+    'INSERT INTO research_steps (run_id, kind, label, detail, url, provider, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
     runId,
     step.kind,
     step.label,
     step.detail ?? null,
     step.url ?? null,
     step.provider ?? null,
-    step.backupReason ?? null,
     now
   )
+}
+
+/** How many of a run's searches the search service answered. */
+export function answeredSearches(sql: Sql, runId: string): number {
+  return sql.exec<{ n: number }>("SELECT COUNT(*) AS n FROM research_steps WHERE run_id = ? AND kind = 'search' AND provider IS NOT NULL", runId).toArray()[0]?.n ?? 0
 }
 
 export function hasStep(sql: Sql, runId: string, kind: StepKind, label: string): boolean {
@@ -347,9 +349,8 @@ export function runDetail(sql: Sql, id: string): RunDetail | null {
       detail: string | null
       url: string | null
       provider: string | null
-      backup_reason: string | null
       created_at: number
-    }>('SELECT seq, kind, label, detail, url, provider, backup_reason, created_at FROM research_steps WHERE run_id = ? ORDER BY seq', id)
+    }>('SELECT seq, kind, label, detail, url, provider, created_at FROM research_steps WHERE run_id = ? ORDER BY seq', id)
     .toArray()
   const steps: RunStep[] = rows.map((row) => ({
     seq: row.seq,
@@ -357,17 +358,11 @@ export function runDetail(sql: Sql, id: string): RunDetail | null {
     label: row.label,
     detail: row.detail,
     url: row.url,
-    provider: row.provider === 'tavily' || row.provider === 'google' ? row.provider : null,
+    provider: row.provider === 'tavily' ? row.provider : null,
     at: row.created_at,
   }))
-  const searchedWith: SearchedWith = { tavily: 0, google: 0, backupReason: null }
-  for (const row of rows) {
-    if (row.provider === 'tavily') searchedWith.tavily++
-    else if (row.provider === 'google') {
-      searchedWith.google++
-      searchedWith.backupReason = isBackupReason(row.backup_reason) ? row.backup_reason : null
-    }
-  }
+  // Runs from before Tavily was the only search may have 'google' steps; their details say so.
+  const searchedWith: SearchedWith = { tavily: rows.filter((row) => row.provider === 'tavily').length }
   const sources: RunSource[] = sql
     .exec<{ n: number; url: string; title: string; host: string; cited: number }>(
       "SELECT n, url, title, host, cited FROM research_pages WHERE run_id = ? AND state = 'read' ORDER BY n",
@@ -381,6 +376,6 @@ export function runDetail(sql: Sql, id: string): RunDetail | null {
     steps,
     sources,
     report: run.report,
-    searchedWith: searchedWith.tavily + searchedWith.google > 0 ? searchedWith : null,
+    searchedWith: searchedWith.tavily > 0 ? searchedWith : null,
   }
 }

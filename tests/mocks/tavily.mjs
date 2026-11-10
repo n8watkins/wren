@@ -3,7 +3,7 @@
 // TAVILY_BASE_URL (scripts/e2e-server.mjs). What it answers depends on the
 // query (the planner in tests/mocks/gemini.mjs keeps the question's mock: tag
 // in every query):
-//   "mock:tavily-down"  432, Tavily's "out of credits" (the run uses the backup)
+//   "mock:tavily-down"  432, Tavily's "out of credits" (the run stops and says so)
 //   "mock:slow"         answers after 2.5 s (for Cancel)
 //   "mock:empty"        no results
 //   "mock:hostile"      adds a page whose text tries to give Wren orders

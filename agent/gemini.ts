@@ -233,9 +233,9 @@ export async function generateJson(
 }
 
 /*
- * Research's calls (agent/research.ts): planning the searches, reading a PDF,
- * writing the report, and the search backup. The agent takes one of the
- * person's daily research runs before a run starts (demo key).
+ * Research's calls (agent/research.ts): planning the searches, reading a PDF
+ * and writing the report. The agent takes one of the person's daily research
+ * runs before a run starts (demo key).
  */
 
 /** A part of a one-shot request: text, or a PDF the model reads. */
@@ -262,8 +262,8 @@ function toBase64(bytes: Uint8Array): string {
   return btoa(binary)
 }
 
-/** One whole (not streamed) answer, with the model fallback. Throws GeminiError. */
-async function generate(options: GenerateOptions, googleSearch: boolean): Promise<{ text: string; web: { url: string; title: string }[] }> {
+/** A whole (not streamed) answer as text, with the model fallback: research planning, reading a PDF, writing the report. Throws GeminiError. */
+export async function generateText(options: GenerateOptions): Promise<string> {
   return withFallback(options, 'research.model_failed', async (model) => {
     if (options.signal.aborted) throw new GeminiError('upstream_error')
     const attempt = new AbortController()
@@ -290,13 +290,9 @@ async function generate(options: GenerateOptions, googleSearch: boolean): Promis
           abortSignal: attempt.signal,
           thinkingConfig: { thinkingLevel: ThinkingLevel.LOW },
           ...(options.json ? { responseMimeType: 'application/json' } : {}),
-          ...(googleSearch ? { tools: [{ googleSearch: {} }] } : {}),
         },
       })
-      const web = (response.candidates?.[0]?.groundingMetadata?.groundingChunks ?? []).flatMap((chunk) =>
-        chunk.web?.uri ? [{ url: chunk.web.uri, title: chunk.web.title ?? '' }] : []
-      )
-      return { text: response.text ?? '', web }
+      return response.text ?? ''
     } catch (error) {
       // A cancelled run: the other model's attempt ends at its first line, without a request.
       if (options.signal.aborted) throw new GeminiError('upstream_error')
@@ -306,27 +302,6 @@ async function generate(options: GenerateOptions, googleSearch: boolean): Promis
       options.signal.removeEventListener('abort', stop)
     }
   })
-}
-
-/** A whole answer as text: research planning, reading a PDF, writing the report. */
-export async function generateText(options: GenerateOptions): Promise<string> {
-  return (await generate(options, false)).text
-}
-
-/**
- * The search backup: Gemini answers with its Google Search tool on, and the
- * pages it found (the grounding sources) are the results. Their addresses are
- * Google redirect links that the safe fetcher follows to the page.
- */
-export async function searchWithGoogle(
-  options: Omit<GenerateOptions, 'parts' | 'json' | 'systemPrompt'> & { query: string }
-): Promise<{ url: string; title: string }[]> {
-  const { web } = await generate(
-    { ...options, systemPrompt: 'Search the web for the query and answer in one short paragraph.', parts: [{ text: options.query }] },
-    true
-  )
-  const seen = new Set<string>()
-  return web.filter((page) => !seen.has(page.url) && seen.add(page.url))
 }
 
 /*

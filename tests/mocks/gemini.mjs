@@ -12,7 +12,6 @@
 // Research uses generateContent (not streamed), told apart by its system prompt:
 //   the planner        three queries, each keeping the question's mock: tag
 //                      ("mock:fail" in the question: a 500 instead)
-//   Google Search      (the search backup) two results at private addresses
 //   the report writer  a report citing every source it was given; for
 //                      "mock:hostile" also a citation of a source that doesn't
 //                      exist and links to a page that wasn't read
@@ -83,24 +82,14 @@ function json(res, status, body) {
   return true
 }
 
-function answer(res, text, extra = {}) {
-  return json(res, 200, { candidates: [{ content: { role: 'model', parts: [{ text }] }, finishReason: 'STOP', index: 0, ...extra }] })
+function answer(res, text) {
+  return json(res, 200, { candidates: [{ content: { role: 'model', parts: [{ text }] }, finishReason: 'STOP', index: 0 }] })
 }
 
-/** Research's one-shot calls (agent/gemini.ts generateText and searchWithGoogle); false when the call isn't research's. */
+/** Research's one-shot calls (agent/gemini.ts generateText); false when the call isn't research's. */
 function researchCall(res, body) {
   const system = body.systemInstruction?.parts?.map((p) => p.text).join(' ') ?? ''
   const prompt = (body.contents ?? []).flatMap((t) => t.parts ?? []).map((p) => p.text ?? '').join('\n')
-  if ((body.tools ?? []).some((tool) => tool.googleSearch)) {
-    return answer(res, 'Here is what I found.', {
-      groundingMetadata: {
-        groundingChunks: [
-          { web: { uri: 'http://127.0.0.1/grounding-redirect/1', title: 'localhost' } },
-          { web: { uri: 'http://10.0.0.8/grounding-redirect/2', title: '10.0.0.8' } },
-        ],
-      },
-    })
-  }
   if (system.startsWith('Reply with exactly one word')) return answer(res, 'ok')
   if (system.startsWith('You plan web research')) {
     const question = prompt.replace(/^Question:\s*/, '')
