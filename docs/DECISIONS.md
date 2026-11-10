@@ -17,8 +17,12 @@ Read this before changing product, design or workflow, and add every new decisio
 - **Phases** (owner, 2026-11-09; reordered from voice, research, memory): 1 foundation and chat (done), 2 memory, 3 research, 4 voice, then launch.
   Memory and research cores are built in parallel lanes; each is wired into chat one at a time, memory first.
   Voice was planned last and alone because it would move chat onto the agent's WebSocket; that move is now its own later step (2026-11-10, below), so voice was built in parallel with memory in chat.
-- **Research searches with Tavily, with Gemini's Google Search as the backup** (owner, 2026-11-09).
-  Tavily returns results and page text, so a run can show what it searched, read and cited; the backup covers Tavily being down or out of credits.
+- **Tavily is research's only search** (owner, 2026-11-10; replaces "Tavily first, Gemini Google Search as the backup" from 2026-11-09).
+  Tavily returns results and page text, so a run can show what it searched, read and cited.
+  The Gemini Google Search grounding backup is gone: in the first real runs every grounded request got 429 on both lite models, so it covered nothing, and a backup that never works only hides that Tavily is down.
+  When Tavily is out of credits, rejects the key or has no key, a run stops at that search and says so plainly ("Tavily, the web search research uses, is out of credits right now."); when every search fails it stops as "isn't answering right now".
+  Either way the run doesn't count against the person's daily runs, like every run that ends without a report.
+  Without `TAVILY_API_KEY` research is off: starting a run answers `research_unavailable` and `/api/health` reports research as not ok.
   Wren has its own key (`TAVILY_API_KEY`), never one shared with another project.
 - **Memory saves both ways** (owner, 2026-11-09): Wren saves short, lasting facts from a conversation on its own (preferences, projects, recurring topics), and a "Save to Memory" button saves anything you choose.
   Every save Wren makes on its own shows a "Saved to Memory · Undo" line in the chat, so nothing is saved silently, and the Memory library lists, edits and deletes everything.
@@ -59,7 +63,9 @@ Read this before changing product, design or workflow, and add every new decisio
   Closing the tab or pressing Stop ends the answer and keeps what was written.
   Moving typed chat onto the agent's WebSocket, with resumable streams, is a later step of its own (2026-11-10).
 - **Gemini** through `@google/genai`: `gemini-3.5-flash-lite`, with `gemini-3.1-flash-lite` as the backup (owner, 2026-11-09), set in `wrangler.jsonc` (`GEMINI_MODEL`, `GEMINI_FALLBACK_MODEL`).
-  The backup is tried once when the first model fails or sends no text within 20 s; a rejected key is never retried, and an answer that already started is never restarted (`agent/gemini.ts`).
+  The backup is tried once when the first model fails or sends no text within 10 s; a rejected key is never retried, and an answer that already started is never restarted (`agent/gemini.ts`).
+  The 10 s wait (owner, 2026-11-10; it was 20 s) comes from the daily model check's first real runs: `gemini-3.5-flash-lite` started a reply in 2 to 9 s when it was working, so 10 s clears every normal start, while a stalled answer switches to `gemini-3.1-flash-lite` 10 s sooner.
+  The last model tried (the backup, or the only model) keeps 20 s, because there is nothing left to switch to and `gemini-3.1-flash-lite` took up to 20 s in the same runs.
   It replaced `gemini-3.8-flash`, which stopped answering on the live site (no response within 40 s) while both lite models answered in about a second.
 - **The demo budget**: 50 messages, 10 voice minutes and 3 research runs per person per day, reset at midnight UTC (owner placeholders, 2026-11-09), counted in the person's agent, plus 150 messages per IP per day (`lib/limits.ts`).
   Burst limits per user and per IP use Workers rate limiting.
@@ -92,7 +98,7 @@ Read this before changing product, design or workflow, and add every new decisio
   - The Memory page's search: 0.68, or 0.60 with a lead of 0.05 over the median of the closest 20.
     Precision 0.89, recall 0.72, and an off-topic search showed something 0.7% of the time; the old 0.6 showed something for 66% of them, at precision 0.09.
   - The extractor's look at what is already saved: 0.62 (corrections scored 0.71 to 0.80 against what they correct, so it keeps every one, and shows fewer unrelated memories to choose from).
-- **Research runs** (2026-11-09, phase 3 engine and the Runs page; starting a run from chat comes next).
+- **Research runs** (2026-11-09, phase 3 engine and the Runs page; started from chat since 2026-11-10, below).
   A run lives in the person's own agent (`agent/research.ts`, tables in `agent/research-store.ts`): plan 3 to 5 searches with the chat model, search each one, read up to 8 pages (at most 2 per site, 12 tries), then write a Markdown report where every `[n]` is a page the run read.
   It is a small state machine saved in SQLite, and each step is its own scheduled callback (the Agents SDK's `schedule`) doing one bounded piece of work: one model call, one search or one page.
   The SDK keeps a callback until it finishes, so a restart in the middle of a step runs that step again from the saved state, and a step writes only if the run is still where it found it, so nothing is saved twice; a run that stops moving for 90 s gets its next step scheduled again when it is looked at, and one still going after 10 minutes is stopped.
@@ -100,9 +106,23 @@ Read this before changing product, design or workflow, and add every new decisio
   The Runs page watches a run through one NDJSON stream (`GET /api/runs/:id/stream`) rather than polling, because polling every second or two would use up the per-person burst limit (12 requests a minute); the stream sends the whole run after every step and reconnects if it drops.
   Budget: one run at a time and the existing 3 a day, signed in only, never counted against messages; a run that ends without a report is given back, a cancelled one is not (its searches were already paid for).
   Research always uses the demo Gemini key: a person's own key lives only in their browser, and a run carries on after the tab closes.
-- **Search: Tavily, then Gemini's Google Search** (`agent/web-search.ts`).
-  Tavily is asked for each result's page text, which the run uses instead of fetching when there is enough of it; the backup takes over when there is no `TAVILY_API_KEY` (optional, read through `lib/secrets.ts`), Tavily is out of credits (432, 433, 429), rejects the key, or fails.
-  Which one served each search is logged (`provider`) and shown in the run.
+- **Research in chat** (2026-11-10, phase 3; `agent/chat-research.ts`, `components/app/ResearchCard.tsx`).
+  Research in the composer is a mode, not a separate box: turned on (saffron), what you send starts a run in this chat (`POST /api/chat/research`) instead of a message, behind the same per-person 3 a day and per-network caps, and it turns itself off once the run starts.
+  "Research this" on an answer puts the question that answer was for into the composer with research on, rather than starting at once: with 3 runs a day, a run should never start from a stray click, and a follow-up like "tell me more" usually needs rewording first.
+  A run started from chat adds two messages, your question (marked Research) and Wren's message for the run, linked to the run in `chat_research`.
+  While the run goes, that message is a saffron card watching the run's stream (the Runs page's watch, shared in `components/app/RunParts.tsx`): its status, what it searched and read, which service searched, Stop and a link to the full run; a reload, or the chat opened elsewhere, reattaches to it.
+  When the run ends, the agent writes the report into the message (on the run's end, and again on any chat load that finds a finished run still waiting), and keeps its sources and which service searched beside it, so the report stays in the chat after the run is trimmed from the Runs page.
+  The report is rendered like the Runs page's (sanitized Markdown, no HTML or images, links only to pages it read), and in the conversation the model sees it is Wren's turn, as "Research report on <question>", the report and its sources, capped at 8,000 characters (`RESEARCH_LIMITS.chatHistoryChars`), so the chat can carry on about it; a run still going, failed or stopped adds nothing.
+  A report is not regenerated as a chat answer; a failed run offers Try again.
+  "Save findings to memory" uses the Save to Memory path (the request's key and IP, inside memory's caps, saved once) with a note written for it: "Research: <question>", the report as plain text, and the pages it cites with their addresses, shortening the report and never the sources to fit a note's 4,000 characters.
+  Each search step records which service answered it (`provider`, added to existing tables on start), so the card and report say "Searched with Tavily".
+  Databases from the backup's days keep an unused `backup_reason` column, and their old Google Search steps count for nothing in "Searched with".
+  Checked with real Tavily and gemini-3.5-flash-lite: a run from chat on buying a used electric car took 27 s, read 8 pages and cited 7, and a follow-up question was answered from the report.
+- **Search: Tavily** (`agent/web-search.ts`).
+  Tavily is asked for each result's page text, which the run uses instead of fetching when there is enough of it.
+  A search that can't run throws `SearchError` with why: `no_key` (no `TAVILY_API_KEY`, read through `lib/secrets.ts`), `out_of_credits` (432, 433, 429), `rejected` (401, 403) or `error` (anything else).
+  The first three stop the run at once, since every other search would fail the same way; `error` skips that one search, and the run stops only if none answered.
+  Each search is logged (`research.search` or `research.search_failed`, with `provider` and the code).
 - **Safe fetching** (`lib/web/fetch-page.ts`, reusable by Memory for links): http and https only, on the usual ports, with no user:password; never localhost, `.local`, `.internal` and similar names, single-label names, or private, loopback, link-local, shared, test, multicast or reserved IPv4 and IPv6 addresses (IPv4 in any notation, and IPv4 inside IPv6); at most 4 redirects, each one checked again; 10 s for the whole fetch; 2 MB, counted as the body arrives; HTML, plain text and PDF only.
   HTML is reduced to readable text with scripts, styles, forms and page furniture removed; a PDF is turned into text by Gemini as data.
   A hostname that resolves to a private address can't be checked before the fetch in a Worker; Cloudflare's network doesn't route Worker fetches to private addresses, which covers it in production.
@@ -131,7 +151,7 @@ Read this before changing product, design or workflow, and add every new decisio
 - **A daily real-model check behind `/api/health`** (owner, 2026-11-10).
   `/api/health` is fast and never calls a model, so OpenPing can poll it, but on its own it couldn't see `gemini-3.8-flash` go silent on the live site.
   Once a day (Cron Trigger `0 14 * * *`, early morning in the US) the Worker's `scheduled` handler makes one tiny real call to each dependency, all at once, each with a 20 s timeout, on the demo key and Worker secrets (`agent/model-check.ts`): a one-word reply from the chat model and from its fallback (each called on its own, so the fallback can't hide a dead primary), one `gemini-embedding-2` embedding that must have 768 values, a Gemini Live session opened until `setupComplete` and closed (no audio), and one Tavily search (`max_results` 1, basic depth, no page text).
-  It has no Google Search grounding check: Tavily is Wren's only search and the model gets no Google Search tool (owner, 2026-11-10); the first real runs got 429 on every grounded request, and the research engine's grounding backup is being removed in its own change.
+  It has no Google Search grounding check: Tavily is Wren's only search and the model gets no Google Search tool (owner, 2026-11-10); the first real runs got 429 on every grounded request, and the research engine's grounding backup was removed the same day.
   A call that fails is tried once more after 10 s, because a run holds health for a day: a one-off 503 (seen in the first real runs) should not page, while a model that is really down fails both tries.
   A dependency without its key is recorded as not checked, never as failed.
   The result (per dependency: ok, ms, a short error code and status, never upstream text) is saved in a small `ModelCheck` Durable Object (one instance, migration `v2`, `agent/model-check-store.ts`) rather than D1: it needs no schema migration step at deploy, keeps operational state out of the accounts database, and follows the `DailyCounter` pattern; it only saves and reads, so nothing there can start a model call.

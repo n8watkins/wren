@@ -37,8 +37,8 @@ export interface StreamReplyOptions {
   model: string
   /** Tried once when `model` fails or stays silent before any text. */
   fallbackModel?: string
-  /** How long a model may take to send its first text before it counts as failed. */
-  firstTextMs?: number
+  /** How long a model may take to send its first text before it counts as failed (tests shorten it). */
+  firstTextMs?: FirstTextWait
   systemPrompt: string
   history: { role: Role; text: string }[]
   signal: AbortSignal
@@ -57,8 +57,23 @@ export function classifyGeminiError(error: unknown, keySource: KeySource): Gemin
   return new GeminiError('upstream_error', status)
 }
 
-/** A model that has sent no text by then is treated as down (some never answer at all). */
-const FIRST_TEXT_MS = 20_000
+/**
+ * How long a model may take to send its first text before it is treated as
+ * down (some never answer at all). The first model gets 10 s before chat
+ * switches to the fallback: the daily model check measured normal starts of 2
+ * to 9 s on gemini-3.5-flash-lite, so 10 s clears every one of them while a
+ * stalled answer moves on 10 s sooner than it used to. The last model (the
+ * fallback, or the only one) keeps 20 s, as there is nothing left to switch to
+ * and gemini-3.1-flash-lite took up to 20 s in the same check.
+ */
+export interface FirstTextWait {
+  /** The first model, when a fallback is there to take over. */
+  beforeFallback: number
+  /** The last model tried. */
+  last: number
+}
+
+export const FIRST_TEXT_MS: FirstTextWait = { beforeFallback: 10_000, last: 20_000 }
 
 /** Failures another model might not have: outages, silence, per-model quota. A bad key is a bad key everywhere. */
 function worthAnotherModel(error: GeminiError): boolean {
@@ -73,10 +88,11 @@ export async function* streamReply(options: StreamReplyOptions): AsyncGenerator<
   const models = [options.model]
   if (options.fallbackModel && options.fallbackModel !== options.model) models.push(options.fallbackModel)
   let failure: GeminiError | undefined
-  for (const model of models) {
+  const wait = options.firstTextMs ?? FIRST_TEXT_MS
+  for (const [i, model] of models.entries()) {
     let sentText = false
     try {
-      for await (const text of streamModel(options, model)) {
+      for await (const text of streamModel(options, model, i < models.length - 1 ? wait.beforeFallback : wait.last)) {
         sentText = true
         yield text
       }
@@ -92,7 +108,7 @@ export async function* streamReply(options: StreamReplyOptions): AsyncGenerator<
 }
 
 /** One model's stream. Its own abort covers both Stop and a model that stays silent. */
-async function* streamModel(options: StreamReplyOptions, model: string): AsyncGenerator<string> {
+async function* streamModel(options: StreamReplyOptions, model: string, firstTextMs: number): AsyncGenerator<string> {
   const attempt = new AbortController()
   const stop = () => attempt.abort()
   options.signal.addEventListener('abort', stop)
@@ -100,7 +116,7 @@ async function* streamModel(options: StreamReplyOptions, model: string): AsyncGe
   const timer = setTimeout(() => {
     silent = true
     attempt.abort()
-  }, options.firstTextMs ?? FIRST_TEXT_MS)
+  }, firstTextMs)
   const fail = (error: unknown) => (silent ? new GeminiError('upstream_error', 504) : classifyGeminiError(error, options.keySource))
   try {
     const ai = new GoogleGenAI({
@@ -233,9 +249,9 @@ export async function generateJson(
 }
 
 /*
- * Research's calls (agent/research.ts): planning the searches, reading a PDF,
- * writing the report, and the search backup. The agent takes one of the
- * person's daily research runs before a run starts (demo key).
+ * Research's calls (agent/research.ts): planning the searches, reading a PDF
+ * and writing the report. The agent takes one of the person's daily research
+ * runs before a run starts (demo key).
  */
 
 /** A part of a one-shot request: text, or a PDF the model reads. */
@@ -262,8 +278,8 @@ function toBase64(bytes: Uint8Array): string {
   return btoa(binary)
 }
 
-/** One whole (not streamed) answer, with the model fallback. Throws GeminiError. */
-async function generate(options: GenerateOptions, googleSearch: boolean): Promise<{ text: string; web: { url: string; title: string }[] }> {
+/** A whole (not streamed) answer as text, with the model fallback: research planning, reading a PDF, writing the report. Throws GeminiError. */
+export async function generateText(options: GenerateOptions): Promise<string> {
   return withFallback(options, 'research.model_failed', async (model) => {
     if (options.signal.aborted) throw new GeminiError('upstream_error')
     const attempt = new AbortController()
@@ -290,13 +306,9 @@ async function generate(options: GenerateOptions, googleSearch: boolean): Promis
           abortSignal: attempt.signal,
           thinkingConfig: { thinkingLevel: ThinkingLevel.LOW },
           ...(options.json ? { responseMimeType: 'application/json' } : {}),
-          ...(googleSearch ? { tools: [{ googleSearch: {} }] } : {}),
         },
       })
-      const web = (response.candidates?.[0]?.groundingMetadata?.groundingChunks ?? []).flatMap((chunk) =>
-        chunk.web?.uri ? [{ url: chunk.web.uri, title: chunk.web.title ?? '' }] : []
-      )
-      return { text: response.text ?? '', web }
+      return response.text ?? ''
     } catch (error) {
       // A cancelled run: the other model's attempt ends at its first line, without a request.
       if (options.signal.aborted) throw new GeminiError('upstream_error')
@@ -306,27 +318,6 @@ async function generate(options: GenerateOptions, googleSearch: boolean): Promis
       options.signal.removeEventListener('abort', stop)
     }
   })
-}
-
-/** A whole answer as text: research planning, reading a PDF, writing the report. */
-export async function generateText(options: GenerateOptions): Promise<string> {
-  return (await generate(options, false)).text
-}
-
-/**
- * The search backup: Gemini answers with its Google Search tool on, and the
- * pages it found (the grounding sources) are the results. Their addresses are
- * Google redirect links that the safe fetcher follows to the page.
- */
-export async function searchWithGoogle(
-  options: Omit<GenerateOptions, 'parts' | 'json' | 'systemPrompt'> & { query: string }
-): Promise<{ url: string; title: string }[]> {
-  const { web } = await generate(
-    { ...options, systemPrompt: 'Search the web for the query and answer in one short paragraph.', parts: [{ text: options.query }] },
-    true
-  )
-  const seen = new Set<string>()
-  return web.filter((page) => !seen.has(page.url) && seen.add(page.url))
 }
 
 /*

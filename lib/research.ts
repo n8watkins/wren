@@ -12,12 +12,34 @@ export function isActive(status: RunStatus): boolean {
   return ACTIVE_STATUSES.has(status)
 }
 
+/** A run's status in words, for the Runs page and the card in chat. */
+export const RUN_STATUS_LABELS: Record<RunStatus, string> = {
+  planning: 'Planning searches',
+  searching: 'Searching',
+  reading: 'Reading pages',
+  writing: 'Writing the report',
+  done: 'Done',
+  failed: 'Stopped',
+  cancelled: 'Cancelled',
+}
+
 /** Why a run ended without a report. The person's daily run is given back for all of them. */
-export type RunFailure = 'no_results' | 'no_sources' | 'model_busy' | 'model_unavailable' | 'model_error' | 'stalled' | 'internal'
+export type RunFailure =
+  | 'no_results'
+  | 'no_sources'
+  | 'search_out_of_credits'
+  | 'search_unavailable'
+  | 'model_busy'
+  | 'model_unavailable'
+  | 'model_error'
+  | 'stalled'
+  | 'internal'
 
 export const RUN_FAILURES: Record<RunFailure, string> = {
   no_results: 'None of the searches found anything to read.',
   no_sources: 'None of the pages it found could be read.',
+  search_out_of_credits: 'Tavily, the web search research uses, is out of credits right now.',
+  search_unavailable: 'Tavily, the web search research uses, isn’t answering right now.',
   model_busy: 'Gemini is busy right now.',
   model_unavailable: 'Gemini isn’t available right now.',
   model_error: 'Gemini didn’t answer.',
@@ -35,6 +57,19 @@ export function isRunFailure(value: unknown): value is RunFailure {
  */
 export type StepKind = 'plan' | 'search' | 'read' | 'skip' | 'note' | 'write' | 'error'
 
+/** Which service answered a search. Tavily is research's only search (owner, 2026-11-10). */
+export type SearchProvider = 'tavily'
+
+/** How a run's searches went: how many Tavily answered. */
+export interface SearchedWith {
+  tavily: number
+}
+
+/** One line saying which service searched: "Searched with Tavily". */
+export function searchedWithLine(searched: SearchedWith | null): string | null {
+  return searched && searched.tavily > 0 ? 'Searched with Tavily' : null
+}
+
 export interface RunStep {
   seq: number
   kind: StepKind
@@ -42,6 +77,8 @@ export interface RunStep {
   detail: string | null
   /** The page a read or skip was about. */
   url: string | null
+  /** For a search: which service answered it. */
+  provider?: SearchProvider | null
   at: number
 }
 
@@ -71,6 +108,25 @@ export interface RunDetail extends RunSummary {
   sources: RunSource[]
   /** Markdown; every [n] in it is a source above. */
   report: string | null
+  /** Which service answered the searches so far (null before the first). */
+  searchedWith: SearchedWith | null
+}
+
+/**
+ * A run started from chat, on the Wren message that shows it (the card while
+ * it goes, then the report). The run itself stays on the Runs page; what the
+ * chat needs to show the report is kept with the message, so the report stays
+ * in the chat even after the run is trimmed from the Runs page.
+ */
+export interface MessageResearch {
+  runId: string
+  question: string
+  /** The run's status while it goes, then how it ended. */
+  status: RunStatus
+  failure: RunFailure | null
+  /** The pages it read, once it is done. */
+  sources: RunSource[]
+  searchedWith: SearchedWith | null
 }
 
 /**

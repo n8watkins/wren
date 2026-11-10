@@ -53,6 +53,18 @@ test('a guest round trip streams an answer and counts one message', async ({ req
   expect((await (await request.get('/api/guest/usage')).json()).chat).toEqual({ used: 2, limit: 5 })
 })
 
+test('a stalled chat model hands over to the fallback after 10 s, not 20', async ({ request }) => {
+  await startGuest(request)
+  const started = Date.now()
+  const reply = await guestSay(request, 'mock:stall are you there?')
+  const waited = Date.now() - started
+  expect(reply.events.filter((e) => e.t === 'delta').map((e) => e.text).join('')).toBe('Answered by gemini-3.1-flash-lite.')
+  expect(reply.events.at(-1)).toEqual({ t: 'done', status: 'done' })
+  // The first model's 10 s wait, then the fallback's quick answer.
+  expect(waited).toBeGreaterThanOrEqual(9_500)
+  expect(waited).toBeLessThan(18_000)
+})
+
 test('a guest gets five messages a day', async ({ request }) => {
   await startGuest(request)
   for (let i = 0; i < 5; i++) expect((await guestSay(request, `message ${i}`)).status).toBe(200)

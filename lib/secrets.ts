@@ -15,7 +15,7 @@ export type OptionalSetting =
   | 'GEMINI_BASE_URL'
   /** Local and test runs only: "local" keeps memory's search vectors in the agent's SQLite (Vectorize has no local mode). /api/health fails if a production deploy has it. */
   | 'MEMORY_VECTORS'
-  /** Research search (Tavily). Without it, research searches with Gemini's Google Search tool. */
+  /** Research search (Tavily), research's only search. Without it, research is off. */
   | 'TAVILY_API_KEY'
   /** Test runs only: the local mock of the Tavily API. /api/health fails if a production deploy has it. */
   | 'TAVILY_BASE_URL'

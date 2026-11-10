@@ -92,12 +92,8 @@ export async function GET(): Promise<Response> {
     signInGithub: { ok: methods.github, detail: methods.github ? 'GitHub sign-in is set up' : 'GitHub OAuth app not set up yet' },
     voice: voiceCheck(env, demoKey),
     research: {
-      ok: demoKey,
-      detail: !demoKey
-        ? 'needs the demo key'
-        : tavily
-          ? 'searches with Tavily, Gemini Google Search as the backup'
-          : 'no Tavily key yet: searches with Gemini Google Search',
+      ok: demoKey && tavily,
+      detail: !demoKey ? 'needs the demo key' : tavily ? 'searches with Tavily' : 'no Tavily key yet: research is off',
     },
     memory: memoryCheck(env, demoKey),
     models: modelCheck.value

@@ -80,14 +80,13 @@ test('hostile page text cannot steer the run, add a source or add a link', async
   await me.dispose()
 })
 
-test('when Tavily is out of credits the run searches with Google, and a run with nothing to read is given back', async ({ playwright, baseURL }) => {
+test('when Tavily is out of credits the run stops at once, says so, and is given back', async ({ playwright, baseURL }) => {
   const me = await person(playwright, baseURL!)
   const { final } = await research(me, 'mock:tavily-down e-bikes')
-  const searches = final.steps.filter((s: { kind: string }) => s.kind === 'search')
-  expect(searches).toHaveLength(3)
-  for (const search of searches) expect(search.detail).toBe('2 results from Google Search (Tavily is out of credits)')
-  // The backup's results here are private addresses: nothing to read, so the run fails and is refunded.
-  expect(final).toMatchObject({ status: 'failed', failure: 'no_results' })
+  // Tavily is the only search: no search step, no backup, straight to the reason.
+  expect(final).toMatchObject({ status: 'failed', failure: 'search_out_of_credits', searchedWith: null })
+  expect(final.steps.map((s: { kind: string }) => s.kind)).toEqual(['plan', 'error'])
+  expect(final.steps.at(-1).detail).toBe('Tavily, the web search research uses, is out of credits right now. This run doesn’t count against today’s.')
   expect(await researchUsed(me)).toBe(0)
   await me.dispose()
 })
@@ -148,4 +147,44 @@ test('hostile and oversized run requests are refused', async ({ playwright, base
   expect((await me.get("/api/runs/' OR 1=1 --")).status()).toBe(404)
   expect(await researchUsed(me)).toBe(0)
   await me.dispose()
+})
+
+test('research from chat adds the question and the run to your own chat only, and the report lands there', async ({ playwright, baseURL }) => {
+  const me = await person(playwright, baseURL!)
+  const other = await person(playwright, baseURL!, 'other')
+
+  // Strict: no extra fields, a real question.
+  expect((await me.post('/api/chat/research', { data: { question: 'e-bikes?', userId: 'x' } })).status()).toBe(400)
+  expect((await me.post('/api/chat/research', { data: { question: 'e' } })).status()).toBe(400)
+
+  const started = await me.post('/api/chat/research', { data: { question: 'What should I look for in an e-bike?' } })
+  expect(started.status()).toBe(201)
+  const { chat, userMessage, message, run, usage } = await started.json()
+  expect(userMessage).toMatchObject({ role: 'user', content: 'What should I look for in an e-bike?', asksResearch: true })
+  expect(message).toMatchObject({ role: 'model', content: '', research: { runId: run.id, question: 'What should I look for in an e-bike?' } })
+  expect(usage.research.used).toBe(1)
+
+  // Someone else can't add a run to it, or see it.
+  const intrude = await other.post('/api/chat/research', { data: { chatId: chat.id, question: 'Into your chat?' } })
+  expect(intrude.status()).toBe(404)
+  expect((await intrude.json()).error).toBe('chat_not_found')
+  expect((await other.get(`/api/runs/${run.id}`)).status()).toBe(404)
+  expect((await (await other.get('/api/usage')).json()).research.used).toBe(0)
+
+  // Once the run ends, the chat holds the report and its sources.
+  await me.get(`/api/runs/${run.id}/stream`)
+  const loaded = await (await me.get(`/api/chats/${chat.id}`)).json()
+  const card = loaded.messages.find((m: { id: string }) => m.id === message.id)
+  expect(card.status).toBe('done')
+  expect(card.content).toContain('## What to check')
+  expect(card.research.status).toBe('done')
+  expect(card.research.sources.length).toBeGreaterThanOrEqual(3)
+  expect(card.research.searchedWith).toEqual({ tavily: 3 })
+
+  // A report isn't regenerated as a chat answer.
+  const regen = await me.post('/api/chat', { data: { chatId: chat.id, regenerate: true } })
+  expect(regen.status()).toBe(400)
+  expect((await regen.json()).error).toBe('nothing_to_regenerate')
+  await me.dispose()
+  await other.dispose()
 })

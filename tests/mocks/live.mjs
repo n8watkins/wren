@@ -4,10 +4,11 @@
 // JSON in binary frames, and closes with 1007 for a bad key (one starting
 // "bad-"). After about a second of mic audio it answers one turn: the
 // person's words "Hello Wren", a second of a 440 Hz tone as Wren's voice, and
-// "Hi, I'm the mock Wren." A typed message gets "You typed: <text>" back;
-// "mock:drop" closes the connection as if Gemini had gone away. Answers go
-// one at a time, in order, and once something is typed the mock stops
-// answering the mic, so a typed conversation isn't cut into by the fake mic.
+// "Hi, I'm the mock Wren.", once per session, however long the mic stays
+// open (so a slow test run never hears a second turn). A typed message gets
+// "You typed: <text>" back; "mock:drop" closes the connection as if Gemini had
+// gone away. Answers go one at a time, in order, and once something is typed
+// the mock no longer answers the mic, so a typed conversation isn't cut into.
 // Memory, when the setup declares the tools: "remember that <x>" calls
 // save_to_memory with <x> and answers "Saved: <x>." (or that it couldn't);
 // a typed question (ending in "?") calls search_memory with it and adds
@@ -43,6 +44,7 @@ function session(ws, key) {
   const send = (message) => ws.send(Buffer.from(JSON.stringify(message)), { binary: true })
   let heard = 0
   let answering = false
+  let spoken = false
   let tools = new Set()
   let fact = null
   let calls = 0
@@ -117,7 +119,8 @@ function session(ws, key) {
       turns = turns.then(() => typed(input.text))
     } else if (input?.audio?.data) {
       heard += Buffer.from(input.audio.data, 'base64').length
-      if (heard >= AUDIO_BYTES_PER_TURN && !answering && !typedOnce) {
+      if (heard >= AUDIO_BYTES_PER_TURN && !answering && !spoken && !typedOnce) {
+        spoken = true
         answering = true
         turns = turns.then(() => answer('Hello Wren', 'Hi, I’m the mock Wren.'))
       }

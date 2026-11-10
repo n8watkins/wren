@@ -8,6 +8,8 @@ import {
   type RunStatus,
   type RunStep,
   type RunSummary,
+  type SearchProvider,
+  type SearchedWith,
   type StepKind,
 } from '../lib/research'
 import { hostOf } from './research-text'
@@ -44,6 +46,11 @@ export function createResearchTables(sql: Sql): void {
     created_at INTEGER NOT NULL
   )`)
   sql.exec('CREATE INDEX IF NOT EXISTS research_steps_by_run ON research_steps (run_id, seq)')
+  // Added after the first runs: which service answered a search (2026-11-10).
+  // Databases from then may also have a backup_reason column, unused since
+  // Tavily became the only search; it stays, empty.
+  const columns = new Set(sql.exec<{ name: string }>("SELECT name FROM pragma_table_info('research_steps')").toArray().map((c) => c.name))
+  if (!columns.has('provider')) sql.exec('ALTER TABLE research_steps ADD COLUMN provider TEXT')
   sql.exec(`CREATE TABLE IF NOT EXISTS research_pages (
     run_id TEXT NOT NULL REFERENCES research_runs(id) ON DELETE CASCADE,
     page_key TEXT NOT NULL,
@@ -170,18 +177,31 @@ export function updateRun(
 export function addStep(
   sql: Sql,
   runId: string,
-  step: { kind: StepKind; label: string; detail?: string | null; url?: string | null },
+  step: {
+    kind: StepKind
+    label: string
+    detail?: string | null
+    url?: string | null
+    /** For a search: which service answered it. */
+    provider?: SearchProvider
+  },
   now = Date.now()
 ): void {
   sql.exec(
-    'INSERT INTO research_steps (run_id, kind, label, detail, url, created_at) VALUES (?, ?, ?, ?, ?, ?)',
+    'INSERT INTO research_steps (run_id, kind, label, detail, url, provider, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
     runId,
     step.kind,
     step.label,
     step.detail ?? null,
     step.url ?? null,
+    step.provider ?? null,
     now
   )
+}
+
+/** How many of a run's searches the search service answered. */
+export function answeredSearches(sql: Sql, runId: string): number {
+  return sql.exec<{ n: number }>("SELECT COUNT(*) AS n FROM research_steps WHERE run_id = ? AND kind = 'search' AND provider IS NOT NULL", runId).toArray()[0]?.n ?? 0
 }
 
 export function hasStep(sql: Sql, runId: string, kind: StepKind, label: string): boolean {
@@ -321,13 +341,28 @@ export function listRuns(sql: Sql, limit: number = RESEARCH_LIMITS.runsPerPerson
 export function runDetail(sql: Sql, id: string): RunDetail | null {
   const run = getRunState(sql, id)
   if (!run) return null
-  const steps: RunStep[] = sql
-    .exec<{ seq: number; kind: string; label: string; detail: string | null; url: string | null; created_at: number }>(
-      'SELECT seq, kind, label, detail, url, created_at FROM research_steps WHERE run_id = ? ORDER BY seq',
-      id
-    )
+  const rows = sql
+    .exec<{
+      seq: number
+      kind: string
+      label: string
+      detail: string | null
+      url: string | null
+      provider: string | null
+      created_at: number
+    }>('SELECT seq, kind, label, detail, url, provider, created_at FROM research_steps WHERE run_id = ? ORDER BY seq', id)
     .toArray()
-    .map((row) => ({ seq: row.seq, kind: row.kind as StepKind, label: row.label, detail: row.detail, url: row.url, at: row.created_at }))
+  const steps: RunStep[] = rows.map((row) => ({
+    seq: row.seq,
+    kind: row.kind as StepKind,
+    label: row.label,
+    detail: row.detail,
+    url: row.url,
+    provider: row.provider === 'tavily' ? row.provider : null,
+    at: row.created_at,
+  }))
+  // Runs from before Tavily was the only search may have 'google' steps; their details say so.
+  const searchedWith: SearchedWith = { tavily: rows.filter((row) => row.provider === 'tavily').length }
   const sources: RunSource[] = sql
     .exec<{ n: number; url: string; title: string; host: string; cited: number }>(
       "SELECT n, url, title, host, cited FROM research_pages WHERE run_id = ? AND state = 'read' ORDER BY n",
@@ -335,5 +370,12 @@ export function runDetail(sql: Sql, id: string): RunDetail | null {
     )
     .toArray()
     .map((row) => ({ n: row.n, url: row.url, title: row.title, host: row.host, cited: row.cited === 1 }))
-  return { ...summaryOf(sql, run), queries: run.queries, steps, sources, report: run.report }
+  return {
+    ...summaryOf(sql, run),
+    queries: run.queries,
+    steps,
+    sources,
+    report: run.report,
+    searchedWith: searchedWith.tavily > 0 ? searchedWith : null,
+  }
 }

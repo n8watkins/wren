@@ -23,6 +23,7 @@
   --saffron: #875603;
   --saffron-bright: #e3a81b;
   --saffron-soft: #f8eccd;
+  --on-saffron: #fffaf0;
   --sage: #1a6b58;
   --sage-bright: #2e9c80;
   --sage-soft: #ddf0e9;
@@ -63,6 +64,7 @@
     --saffron: #f2b92e;
     --saffron-bright: #f2b92e;
     --saffron-soft: #33280f;
+    --on-saffron: #2a1f08;
     --sage: #4cc7a8;
     --sage-bright: #4cc7a8;
     --sage-soft: #13302a;
@@ -97,6 +99,7 @@
   --saffron: #f2b92e;
   --saffron-bright: #f2b92e;
   --saffron-soft: #33280f;
+  --on-saffron: #2a1f08;
   --sage: #4cc7a8;
   --sage-bright: #4cc7a8;
   --sage-soft: #13302a;
@@ -889,6 +892,22 @@ svg.wren.talking .head {
   text-align: right;
 }
 
+/* Your message that started a research run. */
+.ask-res {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: -2px;
+  font: 500 10.5px/1 var(--f-mono);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--saffron);
+}
+.ask-res svg {
+  width: 12px;
+  height: 12px;
+}
+
 /* "Saved to Memory · Undo": one line per fact Wren saved from your message. */
 .saved-lines {
   display: flex;
@@ -1319,11 +1338,36 @@ svg.wren.talking .head {
   width: 19px;
   height: 19px;
 }
+/* Research mode (the composer's Research is on): saffron, and sending starts a run. */
+.send.res {
+  background: var(--saffron-soft);
+  color: color-mix(in srgb, var(--saffron) 55%, transparent);
+}
+.send.res.go {
+  background: var(--saffron);
+  color: var(--on-saffron);
+}
+.cbox.research,
+.cbox.research:focus-within {
+  border-color: color-mix(in srgb, var(--saffron) 55%, var(--line-strong));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--saffron-soft) 70%, transparent);
+}
+.cbtn.res.on {
+  color: var(--on-saffron);
+  background: var(--saffron);
+}
+.cbtn.res.on:hover {
+  border-color: transparent;
+  background: color-mix(in srgb, var(--saffron) 88%, var(--text));
+}
 .hint {
   font-size: 11.5px;
   color: var(--text-3);
   text-align: center;
   margin-top: 8px;
+}
+.hint.res {
+  color: var(--saffron);
 }
 .alert {
   display: flex;
@@ -1638,6 +1682,23 @@ svg.wren.talking .head {
     width: 18px;
     height: 18px;
   }
+  /* On: outlined with a check, so it never reads as the filled saffron start button beside it. */
+  .mcb .rb.on {
+    color: var(--saffron);
+    background: var(--saffron-soft);
+    box-shadow: inset 0 0 0 1.5px var(--saffron);
+  }
+  .mcb.research {
+    border-color: color-mix(in srgb, var(--saffron) 55%, var(--line-strong));
+  }
+  .mhint {
+    font-size: 12px;
+    line-height: 1.35;
+    margin: 0 6px 6px;
+  }
+  .mhint.res {
+    color: var(--saffron);
+  }
   .mcb textarea {
     flex: 1;
     min-width: 0;
@@ -1907,17 +1968,6 @@ dialog.dialog.narrow {
   font-size: 13px;
   color: var(--text-2);
   line-height: 1.5;
-}
-.howi .later {
-  display: inline-block;
-  margin-top: 6px;
-  font: 500 10px/1 var(--f-mono);
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--text-3);
-  border: 1px dashed var(--line-strong);
-  border-radius: 5px;
-  padding: 3px 5px;
 }
 .c-em {
   background: var(--ember-soft);

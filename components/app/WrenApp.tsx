@@ -4,12 +4,14 @@ import { usePathname, useRouter } from 'next/navigation'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { ChatMessage, ChatSummary } from '@/agent/chats'
 import { ApiError, api, sendGuestMessage, sendMessage } from '@/lib/client/api'
+import { runsApi } from '@/lib/client/runs-api'
 import { authClient } from '@/lib/client/auth-client'
 import { GUEST_CHAT_KEY, KEYS, useLocalSetting, useSessionSetting, writeLocal, writeSession } from '@/lib/client/storage'
 import { turnstileToken } from '@/lib/client/turnstile'
 import { SIGN_IN_FIXES, errorMessage, isErrorCode } from '@/lib/errors'
-import { DAILY_LIMITS, GUEST_LIMITS, nextUtcMidnight, type UsageSnapshot } from '@/lib/limits'
+import { DAILY_LIMITS, GUEST_LIMITS, RESEARCH_LIMITS, nextUtcMidnight, type UsageSnapshot } from '@/lib/limits'
 import type { RecalledMemory } from '@/lib/memory'
+import type { RunDetail } from '@/lib/research'
 import type { ExplainerId } from '../explainers'
 import { Icon } from '../Icons'
 import { WrenMark } from '../WrenMark'
@@ -17,6 +19,7 @@ import { BottomNav, MobileHeader, Sidebar, type Person, type Place, type Theme }
 import { Composer } from './Composer'
 import { MemoryPage, type MemoryAdding } from './MemoryPage'
 import { ConfirmDeleteDialog, ExplainerDialog, HowItWorksDialog, KeyDialog, SignInDialog } from './Dialogs'
+import { settledMessage, type ResearchMessage } from './ResearchCard'
 import { Runs } from './Runs'
 import { Thread, type StreamingAnswer } from './Thread'
 import { Tips } from './Tips'
@@ -136,6 +139,9 @@ export function WrenApp({ person, github, initialChats, initialUsage, guestSiteK
   const saveGuestChat = (next: GuestChat | null) => writeSession(GUEST_CHAT_KEY, next ? JSON.stringify(next) : null)
   const [draft, setDraft] = useState('')
   const [focusKey, setFocusKey] = useState(0)
+  // Research mode in the composer: what you send starts a research run in this chat.
+  const [researchOn, setResearchOn] = useState(false)
+  const [researchStarting, setResearchStarting] = useState(false)
   // The Memory page's open add form; the sidebar's Memory "+" opens the note form from anywhere.
   const [memoryAdding, setMemoryAdding] = useState<MemoryAdding>(null)
   const [modal, setModal] = useState<Modal>(null)
@@ -225,6 +231,7 @@ export function WrenApp({ person, github, initialChats, initialUsage, guestSiteK
     newChatRef.current = null
     setError(null)
     setDraft('')
+    setResearchOn(false)
     if (!streaming) {
       streamChatRef.current = null
       setMessages([])
@@ -464,8 +471,80 @@ export function WrenApp({ person, github, initialChats, initialUsage, guestSiteK
       return
     }
     if (streaming) return
+    if (researchOn) {
+      void startResearch(text)
+      return
+    }
     setDraft('')
     void run({ text })
+  }
+
+  const researchSignIn = () =>
+    setModal({ kind: 'sign-in', reason: `Sign in to research: ${DAILY_LIMITS.research} runs a day, with each report in your chat.` })
+
+  /**
+   * Research from chat: starts a run in this chat (or a new one) and adds
+   * your question and Wren's card for the run, which watches it and turns
+   * into the report (components/app/ResearchCard.tsx).
+   */
+  const startResearch = async (question: string) => {
+    if (!person) return researchSignIn()
+    if (streaming || researchStarting) return
+    setResearchStarting(true)
+    setError(null)
+    const targetChat = place === 'chat' ? chatId : null
+    try {
+      const started = await runsApi.startInChat(question, targetChat)
+      setDraft((current) => (current.trim() === question ? '' : current))
+      setResearchOn(false)
+      setUsage(started.usage)
+      setChats((list) => [{ ...started.chat, updatedAt: Date.now() }, ...list.filter((c) => c.id !== started.chat.id)])
+      const added = [started.userMessage, started.message]
+      if (started.chat.id !== targetChat) {
+        // A new chat (or the old one was deleted meanwhile): this tab made it, so it needn't be loaded.
+        newChatRef.current = started.chat.id
+        setLoadedChatId(started.chat.id)
+        setMessages(added)
+        window.history.replaceState(null, '', `/chat/${started.chat.id}`)
+      } else {
+        setMessages((list) => [...list, ...added])
+      }
+    } catch (failure) {
+      failWith(failure)
+      if (failure instanceof ApiError && failure.code === 'unauthorized') {
+        setModal({ kind: 'sign-in', reason: 'Your session ended. Sign in again to research.' })
+      }
+    } finally {
+      setResearchStarting(false)
+    }
+  }
+
+  const toggleResearch = () => {
+    if (!person) return researchSignIn()
+    setError(null)
+    setResearchOn((on) => !on)
+    setFocusKey((n) => n + 1)
+  }
+
+  /** "Research this" on an answer: the question it answered, in the composer, ready to research. */
+  const researchThis = (messageId: string) => {
+    if (!person) return researchSignIn()
+    const index = shownMessages.findIndex((m) => m.id === messageId)
+    const asked = shownMessages
+      .slice(0, Math.max(0, index))
+      .reverse()
+      .find((m) => m.role === 'user')
+    setError(null)
+    setDraft((asked?.content ?? '').trim().slice(0, RESEARCH_LIMITS.questionChars))
+    setResearchOn(true)
+    setFocusKey((n) => n + 1)
+  }
+
+  /** A run started from chat has ended: its report (or how it ended) replaces the card. */
+  const researchSettled = (messageId: string, ended: RunDetail) => {
+    setMessages((list) => list.map((m) => (m.id === messageId && m.research ? settledMessage(m as ResearchMessage, ended) : m)))
+    // A failed run gives the day's run back.
+    if (ended.status === 'failed' || (ended.status === 'done' && !ended.report)) refreshUsage()
   }
 
   const stop = () => {
@@ -628,8 +707,11 @@ export function WrenApp({ person, github, initialChats, initialUsage, guestSiteK
               streaming={streaming && streaming.chatId === chatId ? streaming : null}
               busy={streaming !== null}
               memory={person ? { chatId: loadedChatId, userKey } : null}
+              researchLimit={DAILY_LIMITS.research}
               onRegenerate={regenerate}
-              onExplain={explain}
+              onResearchThis={researchThis}
+              onResearchSettled={researchSettled}
+              onResearchRetry={(question) => void startResearch(question)}
             />
           ))}
 
@@ -646,6 +728,13 @@ export function WrenApp({ person, github, initialChats, initialUsage, guestSiteK
             onSend={send}
             onStop={stop}
             onExplain={explain}
+            research={{
+              on: researchOn,
+              left: Math.max(0, usage.research.limit - usage.research.used),
+              limit: usage.research.limit,
+              starting: researchStarting,
+            }}
+            onResearch={toggleResearch}
             voice={voice.view}
             onMic={toggleVoice}
             focusKey={focusKey}

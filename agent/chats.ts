@@ -1,6 +1,7 @@
 import type { Sql } from './sql'
 import { SIZE_LIMITS } from '../lib/limits'
 import type { MessageMemory } from '../lib/memory'
+import type { MessageResearch } from '../lib/research'
 
 /**
  * One person's chats, in their own agent's SQLite database. Nothing here takes
@@ -25,6 +26,10 @@ export interface ChatMessage {
   createdAt: number
   /** Memory's marks on it (recalled, saved), added when a chat is loaded. */
   memory?: MessageMemory
+  /** On Wren's message for a run started from chat: the run, then its report's sources. */
+  research?: MessageResearch
+  /** On your message that started a research run. */
+  asksResearch?: boolean
 }
 
 type ChatRow = { id: string; title: string; updated_at: number }

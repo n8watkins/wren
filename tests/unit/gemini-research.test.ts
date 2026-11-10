@@ -1,7 +1,7 @@
 import { createServer, type Server } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { generateText, searchWithGoogle } from '../../agent/gemini'
+import { generateText } from '../../agent/gemini'
 
 // A stand-in for Gemini's generateContent. The model name decides the answer:
 // "ok-*" answers, "down-*" fails with 500, "badkey-*" rejects the key, "slow-*"
@@ -30,14 +30,6 @@ beforeAll(async () => {
           {
             content: { role: 'model', parts: [{ text: `${model} answered` }] },
             finishReason: 'STOP',
-            groundingMetadata: {
-              groundingChunks: [
-                { web: { uri: 'https://vertexaisearch.cloud.google.com/grounding-api-redirect/a', title: 'a.example.org' } },
-                { web: { uri: 'https://vertexaisearch.cloud.google.com/grounding-api-redirect/a', title: 'a.example.org' } },
-                { web: { uri: 'https://vertexaisearch.cloud.google.com/grounding-api-redirect/b', title: 'b.example.org' } },
-                { retrievedContext: { uri: 'gs://bucket/file' } },
-              ],
-            },
           },
         ],
       })
@@ -70,6 +62,7 @@ describe('research calls to Gemini', () => {
     const body = calls[0].body as { generationConfig?: { responseMimeType?: string }; systemInstruction?: unknown; tools?: unknown }
     expect(body.generationConfig?.responseMimeType).toBe('application/json')
     expect(JSON.stringify(body.systemInstruction)).toContain('Plan.')
+    // Tavily is the only search: no research call asks for Gemini's Google Search tool.
     expect(body.tools).toBeUndefined()
   })
 
@@ -92,15 +85,5 @@ describe('research calls to Gemini', () => {
       code: 'demo_unavailable',
     })
     expect(calls).toHaveLength(1)
-  })
-
-  it('searches with the Google Search tool and returns its web sources once each', async () => {
-    calls.length = 0
-    const pages = await searchWithGoogle({ ...base('ok-main'), query: 'e-bikes' })
-    expect(calls[0].body.tools).toEqual([{ googleSearch: {} }])
-    expect(pages).toEqual([
-      { url: 'https://vertexaisearch.cloud.google.com/grounding-api-redirect/a', title: 'a.example.org' },
-      { url: 'https://vertexaisearch.cloud.google.com/grounding-api-redirect/b', title: 'b.example.org' },
-    ])
   })
 })

@@ -69,6 +69,8 @@ export const RESEARCH_LIMITS = {
   runsPerPerson: 50,
   /** A run still going after this long is stopped (and refunded). */
   stalledMs: 10 * 60 * 1000,
+  /** Characters of a report from chat (with its question and sources) in the conversation the model sees. */
+  chatHistoryChars: 8_000,
 } as const
 
 /** Fetching a web page for research (lib/web/fetch-page.ts). */
