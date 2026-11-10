@@ -3,7 +3,7 @@
 import { usePathname, useRouter } from 'next/navigation'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { ChatMessage, ChatSummary } from '@/agent/chats'
-import { ApiError, api, sendGuestMessage, sendMessage } from '@/lib/client/api'
+import { ApiError, api, sendGuestMessage, sendMessage, startGuestSession } from '@/lib/client/api'
 import { runsApi } from '@/lib/client/runs-api'
 import { authClient } from '@/lib/client/auth-client'
 import { GUEST_CHAT_KEY, KEYS, useLocalSetting, useSessionSetting, writeLocal, writeSession } from '@/lib/client/storage'
@@ -34,6 +34,8 @@ export interface WrenAppProps {
   initialUsage: UsageSnapshot | null
   /** Turnstile's public site key when guest chat is on; null means guests must sign in. */
   guestSiteKey: string | null
+  /** Whether this browser already has a valid guest session (the signed guest cookie). */
+  guestReady: boolean
   /** From Cloudflare's country, on the server: visitors from the EEA, Switzerland and the UK get a firmer own-key nudge. */
   region: Region
 }
@@ -117,7 +119,7 @@ type Modal =
   | null
 
 /** The whole app: one client shell that the routes (/, /chat/:id, /runs, /memory) share. */
-export function WrenApp({ person, github, initialChats, initialUsage, guestSiteKey, region }: WrenAppProps) {
+export function WrenApp({ person, github, initialChats, initialUsage, guestSiteKey, guestReady, region }: WrenAppProps) {
   const router = useRouter()
   const pathname = usePathname()
   const { place, chatId } = placeFrom(pathname)
@@ -139,6 +141,33 @@ export function WrenApp({ person, github, initialChats, initialUsage, guestSiteK
     setError(failure instanceof ApiError ? failure.message : errorMessage('internal'), isErrorCode(code) && SIGN_IN_FIXES.has(code))
   }
   const turnstileBox = useRef<HTMLDivElement>(null)
+  /**
+   * The guest session (Turnstile, then /api/guest/start for the signed guest
+   * cookie), started in the background on page load so the human check never
+   * interrupts someone who has typed. Most visitors never see it; when
+   * Cloudflare is unsure, its small challenge shows above the composer
+   * (turnstileBox). One start at a time: a send waits for the one in flight.
+   */
+  const guestStart = useRef<Promise<void> | null>(null)
+  const startGuest = useCallback((): Promise<void> => {
+    if (!guestSiteKey) return Promise.reject(new ApiError('guest_unavailable', errorMessage('guest_unavailable')))
+    guestStart.current ??= (async () => {
+      let token: string
+      try {
+        token = await turnstileToken(turnstileBox.current ?? document.body, guestSiteKey)
+      } catch {
+        throw new ApiError('turnstile_failed', errorMessage('turnstile_failed'))
+      }
+      await startGuestSession(token)
+    })().finally(() => {
+      guestStart.current = null
+    })
+    return guestStart.current
+  }, [guestSiteKey])
+  useEffect(() => {
+    // A failure here is quiet: sending tries again and says what went wrong.
+    if (guestOn && !guestReady) startGuest().catch(() => undefined)
+  }, [guestOn, guestReady, startGuest])
   const guestChat = parseGuestChat(useSessionSetting(GUEST_CHAT_KEY))
   const saveGuestChat = (next: GuestChat | null) => writeSession(GUEST_CHAT_KEY, next ? JSON.stringify(next) : null)
   const [draft, setDraft] = useState('')
@@ -276,12 +305,14 @@ export function WrenApp({ person, github, initialChats, initialUsage, guestSiteK
     let answer = ''
     let finished: ChatMessage['status'] | null = null
     try {
+      // The background check may still be running: wait for it rather than be turned away.
+      await guestStart.current?.catch(() => undefined)
       for await (const event of sendGuestMessage({
         text,
         history: earlier.map((m) => ({ role: m.role, text: m.content })).slice(-GUEST_LIMITS.historyTurns),
         userKey,
         signal: controller.signal,
-        humanCheck: () => turnstileToken(turnstileBox.current ?? document.body, guestSiteKey),
+        startGuest,
       })) {
         if (event.t === 'start' && event.usage) setUsage(event.usage)
         else if (event.t === 'delta') {

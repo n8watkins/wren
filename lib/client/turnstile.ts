@@ -1,10 +1,14 @@
 'use client'
 
 /**
- * Cloudflare Turnstile in the browser, for a guest's first message. The widget
- * is "interaction-only": most people never see it; when Cloudflare wants an
- * interaction it appears in the given container. The token goes to our own
- * server (/api/guest/start), which checks it with siteverify.
+ * Cloudflare Turnstile in the browser, for a guest session. It runs in the
+ * background as the page loads (components/app/WrenApp.tsx), not when someone
+ * sends: the managed widget with "interaction-only" appearance shows nothing
+ * unless Cloudflare is unsure, and then a small challenge appears in the given
+ * container, above the composer. The token (single use, valid 300 s) goes
+ * straight to our own server (/api/guest/start), which checks it with
+ * siteverify and sets the 24-hour guest cookie, so it never has to be kept
+ * fresh.
  */
 interface TurnstileApi {
   render(container: HTMLElement, options: Record<string, unknown>): string
@@ -53,6 +57,7 @@ export async function turnstileToken(container: HTMLElement, siteKey: string): P
         setTimeout(() => api.remove(id), 0)
       },
       'expired-callback': () => reject(new Error('turnstile expired')),
+      'timeout-callback': () => reject(new Error('turnstile timed out')),
     })
   })
 }

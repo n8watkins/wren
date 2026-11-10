@@ -26,6 +26,7 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
   const guestOn = !session && guestChatConfigured(env)
   let chats: ChatSummary[] = []
   let usage: UsageSnapshot | null = null
+  let guestId: string | null = null
   if (session) {
     try {
       const agent = await agentFor(env, session.userId)
@@ -36,7 +37,7 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
       log.warn('layout.agent_unavailable', { code: error instanceof Error ? error.name : 'unknown' })
     }
   } else if (guestOn) {
-    const guestId = await readGuest(env, requestHeaders)
+    guestId = await readGuest(env, requestHeaders)
     if (guestId) {
       try {
         usage = await (await guestAgentFor(env, guestId)).guestUsage()
@@ -53,6 +54,7 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
         initialChats={chats}
         initialUsage={usage}
         guestSiteKey={guestOn ? env.TURNSTILE_SITE_KEY : null}
+        guestReady={guestId !== null}
         region={visitorRegion(getCloudflareContext().cf, requestHeaders, env)}
       />
       {children}

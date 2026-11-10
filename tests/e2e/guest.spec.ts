@@ -1,5 +1,5 @@
 import { expect, test } from './fixtures'
-import { composer, isPhone, meterChat, noHorizontalScroll, sendMessage, skipIntro } from './helpers'
+import { composer, isPhone, meterChat, noHorizontalScroll, sendMessage, signIn, skipIntro } from './helpers'
 
 /** A guest in the browser: the human check, a chat that lives in the tab, and the limit. */
 
@@ -54,4 +54,38 @@ test('after five messages a guest is offered sign-in', async ({ page }) => {
   await expect(alert).toContainText('You’ve used today’s 5 guest messages. Sign in for 10x more messages, voice, research and memory.')
   await alert.getByTestId('error-sign-in').click()
   await expect(page.getByTestId('sign-in')).toBeVisible()
+})
+
+test('the human check runs in the background on load, so sending never waits for it', async ({ page }) => {
+  await skipIntro(page)
+  const started = page.waitForResponse((r) => r.url().endsWith('/api/guest/start') && r.request().method() === 'POST')
+  await page.goto('/')
+  // Before anything is typed: Turnstile (the always-pass test key) and the guest cookie.
+  expect((await started).status()).toBe(200)
+  const starts: string[] = []
+  page.on('request', (r) => {
+    if (r.url().endsWith('/api/guest/start')) starts.push(r.url())
+  })
+  await sendMessage(page, 'Typed after the check')
+  await expect(page.getByTestId('answer').last()).toContainText('You said: "Typed after the check"', { timeout: 20_000 })
+  expect(starts).toEqual([])
+  // Nothing was shown: the challenge box stays empty.
+  await expect(page.getByTestId('turnstile')).toBeEmpty()
+
+  // A reload with the cookie skips the check altogether.
+  await page.reload()
+  await expect(composer(page)).toBeVisible()
+  await page.waitForLoadState('networkidle')
+  expect(starts).toEqual([])
+})
+
+test('signed-in people never run the guest check', async ({ page, baseURL }) => {
+  const starts: string[] = []
+  page.on('request', (r) => {
+    if (r.url().endsWith('/api/guest/start') || r.url().includes('challenges.cloudflare.com')) starts.push(r.url())
+  })
+  await signIn(page, baseURL!)
+  await expect(composer(page)).toBeVisible()
+  await page.waitForLoadState('networkidle')
+  expect(starts).toEqual([])
 })

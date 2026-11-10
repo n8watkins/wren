@@ -28,6 +28,7 @@ Settled: sign-in emails come from `wren@n8builds.dev`, and Wren lives at `wren.n
 
 ## Done
 
+- 2026-11-10: the guest human check runs in the background on page load, so a guest is never stopped after typing.
 - 2026-11-10: free-demo notice for everyone with a push for your own key (a how-to in the key dialog), Memory's reminder, and a firmer nudge for visitors from the EEA, Switzerland and the UK; nothing is blocked.
 - 2026-11-10: chat switches to the backup model after 10 s without text from the first model (was 20 s).
 - 2026-11-10: Tavily is research's only search: the Gemini Google Search backup is removed, and a run that can't search says why and doesn't count.
