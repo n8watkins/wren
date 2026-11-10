@@ -57,3 +57,13 @@ export const userKey = z
   .regex(/^[A-Za-z0-9_.-]+$/)
 
 export const USER_KEY_HEADER = 'x-gemini-key'
+
+/**
+ * A voice ticket (app/api/voice/ticket): the chat to talk in, if any, and
+ * whether the browser will bring the person's own key (which then comes over
+ * the socket, never in this request).
+ */
+export const voiceTicketRequest = z.strictObject({
+  chatId: chatId.optional(),
+  ownKey: z.boolean(),
+})

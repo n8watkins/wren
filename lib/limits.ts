@@ -37,6 +37,8 @@ export const DAILY_IP_LIMITS = {
   research: 9,
   /** Memory's Gemini calls (embeddings, reading PDFs, picking facts) on the demo key. */
   memoryAiCalls: 400,
+  /** Voice seconds on the demo key (3 people's worth: one network can open several accounts). */
+  voiceSeconds: 3 * DAILY_LIMITS.voiceMinutes * 60,
   /** Sign-in emails sent to anyone from one IP. */
   signInEmails: 20,
 } as const
@@ -91,6 +93,33 @@ export const SIZE_LIMITS = {
   historyChars: 60_000,
   /** Characters in a user's own Gemini key. */
   apiKeyChars: 200,
+} as const
+
+/**
+ * Voice (agent/voice.ts): talking to Wren through Gemini Live. The daily
+ * allowance is DAILY_LIMITS.voiceMinutes, counted in seconds as they are used.
+ */
+export const VOICE_LIMITS = {
+  /** Seconds taken from the meter at a time, ahead of use; what isn't used is given back. */
+  chunkSeconds: 10,
+  /** Wren says how much is left once a session gets this close to the end. */
+  warnSeconds: 60,
+  /** One session's longest run (Gemini Live ends a connection at about 10 minutes). */
+  sessionSeconds: 9 * 60,
+  /** A session where nobody has said anything for this long ends, so it can't use up minutes. */
+  idleSeconds: 60,
+  /** The browser sends audio about every 100 ms; this long without a frame means it's gone. */
+  clientSilentMs: 15_000,
+  /** How long Gemini Live may take to accept the session. */
+  setupMs: 10_000,
+  /** How long a voice ticket (POST /api/voice/ticket) is good for. */
+  ticketSeconds: 60,
+  /** Bytes in one audio frame from the browser (100 ms of 16 kHz 16-bit PCM is 3,200). */
+  audioFrameBytes: 32 * 1024,
+  /** Characters in a control message from the browser: a typed message, or the start message with a key. */
+  controlChars: SIZE_LIMITS.messageChars + SIZE_LIMITS.apiKeyChars + 200,
+  /** Earlier messages of the chat given to Gemini Live as context. */
+  historyChars: 20_000,
 } as const
 
 

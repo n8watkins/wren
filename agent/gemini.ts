@@ -328,3 +328,194 @@ export async function searchWithGoogle(
   const seen = new Set<string>()
   return web.filter((page) => !seen.has(page.url) && seen.add(page.url))
 }
+
+/*
+ * Voice (agent/voice.ts): a Gemini Live session over a WebSocket from the
+ * person's agent. The key goes in a header, never the URL. The agent takes
+ * voice seconds from the meter before it connects and while the session runs.
+ */
+
+const LIVE_HOST = 'https://generativelanguage.googleapis.com'
+const LIVE_PATH = '/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent'
+
+/** What a Live session reports, in the order Gemini sends it. */
+export interface LiveEvents {
+  /** 24 kHz 16-bit PCM of Wren speaking. */
+  audio(pcm: Uint8Array): void
+  /** More words of what the person is saying. */
+  inputText(text: string): void
+  /** More words of what Wren is saying. */
+  outputText(text: string): void
+  /** The person talked over Wren; what was being said is cut off. */
+  interrupted(): void
+  /** Wren finished its turn. */
+  turnComplete(): void
+  /** Gemini will close the connection soon (it lasts about 10 minutes). */
+  goAway(): void
+  /** The connection closed; `failure` when it wasn't closed by us. */
+  closed(failure?: GeminiError): void
+}
+
+export interface LiveSession {
+  /** 16 kHz 16-bit PCM from the mic. */
+  sendAudio(pcm: Uint8Array): void
+  /** A typed message; Wren answers it out loud. */
+  sendText(text: string): void
+  close(): void
+}
+
+export interface LiveOptions {
+  apiKey: string
+  keySource: KeySource
+  model: string
+  systemPrompt: string
+  /** The chat so far, given as context without asking for an answer. */
+  history: { role: Role; text: string }[]
+  /** How long Gemini may take to accept the session. */
+  setupMs: number
+  /** Tests point this at a local mock of the Gemini API. */
+  baseUrl?: string
+}
+
+function fromBase64(value: string): Uint8Array {
+  const binary = atob(value)
+  const bytes = new Uint8Array(binary.length)
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i)
+  return bytes
+}
+
+/** A close Gemini sends instead of an HTTP status (a bad key closes with 1007). */
+export function classifyLiveClose(code: number, reason: string, keySource: KeySource): GeminiError {
+  if (/api[ _-]?key|permission|unauthenticated/i.test(reason)) {
+    return new GeminiError(keySource === 'user' ? 'user_key_invalid' : 'demo_unavailable', code)
+  }
+  if (/quota|exhausted|rate limit/i.test(reason)) return new GeminiError(keySource === 'user' ? 'user_key_quota' : 'demo_busy', code)
+  return new GeminiError('upstream_error', code)
+}
+
+interface LiveServerMessage {
+  setupComplete?: object
+  goAway?: object
+  serverContent?: {
+    modelTurn?: { parts?: { inlineData?: { data?: string } }[] }
+    inputTranscription?: { text?: string }
+    outputTranscription?: { text?: string }
+    interrupted?: boolean
+    turnComplete?: boolean
+  }
+}
+
+/**
+ * Opens a Live session and resolves once Gemini has accepted it (and has the
+ * chat so far). Throws GeminiError when it can't.
+ */
+export async function connectLive(options: LiveOptions, events: LiveEvents): Promise<LiveSession> {
+  const url = `${options.baseUrl ?? LIVE_HOST}${LIVE_PATH}`
+  let response: Response
+  try {
+    response = await fetch(url, { headers: { Upgrade: 'websocket', 'x-goog-api-key': options.apiKey } })
+  } catch {
+    throw new GeminiError('upstream_error')
+  }
+  if (!response.webSocket) {
+    const message = await response.text().catch(() => '')
+    throw classifyGeminiError(new ApiError({ message, status: response.status }), options.keySource)
+  }
+  const socket = response.webSocket
+  socket.accept()
+
+  let ready = false
+  let closedByUs = false
+  let settle: { resolve: () => void; reject: (error: GeminiError) => void } | undefined
+  const accepted = new Promise<void>((resolve, reject) => (settle = { resolve, reject }))
+  const timer = setTimeout(() => {
+    settle?.reject(new GeminiError('upstream_error', 504))
+    closedByUs = true
+    socket.close(1000, 'setup timed out')
+  }, options.setupMs)
+
+  const session: LiveSession = {
+    sendAudio: (pcm) => send({ realtimeInput: { audio: { data: toBase64(pcm), mimeType: 'audio/pcm;rate=16000' } } }),
+    sendText: (text) => send({ realtimeInput: { text } }),
+    close: () => {
+      if (closedByUs) return
+      closedByUs = true
+      clearTimeout(timer)
+      try {
+        socket.close(1000, 'done')
+      } catch {
+        // Already closed.
+      }
+    },
+  }
+  function send(message: unknown) {
+    if (!ready || closedByUs) return
+    try {
+      socket.send(JSON.stringify(message))
+    } catch {
+      // The close event reports it.
+    }
+  }
+
+  const decoder = new TextDecoder()
+  socket.addEventListener('message', (event) => {
+    let message: LiveServerMessage
+    try {
+      message = JSON.parse(typeof event.data === 'string' ? event.data : decoder.decode(event.data as ArrayBuffer)) as LiveServerMessage
+    } catch {
+      return
+    }
+    if (message.setupComplete && !ready) {
+      ready = true
+      clearTimeout(timer)
+      if (options.history.length) {
+        socket.send(
+          JSON.stringify({
+            clientContent: { turns: options.history.map((turn) => ({ role: turn.role, parts: [{ text: turn.text }] })), turnComplete: true },
+          })
+        )
+      }
+      settle?.resolve()
+      return
+    }
+    if (message.goAway) events.goAway()
+    const content = message.serverContent
+    if (!content || !ready) return
+    // One message can carry several of these at once.
+    if (content.inputTranscription?.text) events.inputText(content.inputTranscription.text)
+    for (const part of content.modelTurn?.parts ?? []) {
+      if (part.inlineData?.data) events.audio(fromBase64(part.inlineData.data))
+    }
+    if (content.outputTranscription?.text) events.outputText(content.outputTranscription.text)
+    if (content.interrupted) events.interrupted()
+    if (content.turnComplete) events.turnComplete()
+  })
+  socket.addEventListener('close', (event) => {
+    clearTimeout(timer)
+    const failure = classifyLiveClose(event.code, event.reason, options.keySource)
+    if (!ready) settle?.reject(failure)
+    else events.closed(closedByUs ? undefined : failure)
+    closedByUs = true
+  })
+  socket.addEventListener('error', () => {
+    clearTimeout(timer)
+    if (!ready) settle?.reject(new GeminiError('upstream_error'))
+  })
+
+  socket.send(
+    JSON.stringify({
+      setup: {
+        model: `models/${options.model}`,
+        generationConfig: { responseModalities: ['AUDIO'] },
+        systemInstruction: { parts: [{ text: options.systemPrompt }] },
+        inputAudioTranscription: {},
+        outputAudioTranscription: {},
+        // Keeps a long conversation inside the model's context instead of ending the session.
+        contextWindowCompression: { slidingWindow: {} },
+        ...(options.history.length ? { historyConfig: { initialHistoryInClientContent: true } } : {}),
+      },
+    })
+  )
+  await accepted
+  return session
+}
