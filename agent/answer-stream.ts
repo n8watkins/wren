@@ -80,6 +80,14 @@ export function answerStream(options: AnswerStreamOptions): ReadableStream<Uint8
           history: options.history,
           signal: controller.signal,
           baseUrl: options.baseUrl,
+          // Gemini broke off mid-answer and it starts again: the browser and
+          // the saved copy drop what was written so far.
+          onRestart: () => {
+            text = ''
+            options.save?.(text, 'partial')
+            savedAt = Date.now()
+            send({ t: 'restart' })
+          },
         })) {
           text += chunk
           send({ t: 'delta', text: chunk })

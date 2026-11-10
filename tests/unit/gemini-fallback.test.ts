@@ -110,16 +110,30 @@ describe('chat model fallback', () => {
     expect(calls).toEqual(['badkey-main'])
   })
 
-  it('does not restart an answer that already sent text', async () => {
+  it('starts an answer that broke off again once, on the fallback, and says so first', async () => {
+    calls.length = 0
+    const seen: string[] = []
+    for await (const chunk of streamReply({ ...options('half-main', 'ok-backup'), onRestart: () => seen.push('<restart>') })) seen.push(chunk)
+    expect(seen).toEqual(['Half ', '<restart>', 'ok-backup says ', 'hi'])
+    expect(calls).toEqual(['half-main', 'ok-backup'])
+  })
+
+  it('starts again on the same model when it is the only one, and gives up after a second break', async () => {
     calls.length = 0
     const seen: string[] = []
     await expect(
       (async () => {
-        for await (const chunk of streamReply(options('half-main', 'ok-backup'))) seen.push(chunk)
+        for await (const chunk of streamReply({ ...options('half-main'), onRestart: () => seen.push('<restart>') })) seen.push(chunk)
       })()
     ).rejects.toBeInstanceOf(GeminiError)
-    expect(seen).toEqual(['Half '])
-    expect(calls).toEqual(['half-main'])
+    expect(seen).toEqual(['Half ', '<restart>', 'Half '])
+    expect(calls).toEqual(['half-main', 'half-main'])
+  })
+
+  it('never starts a broken answer again on a model that already broke off', async () => {
+    calls.length = 0
+    await expect(answer(options('half-main', 'half-backup'))).rejects.toBeInstanceOf(GeminiError)
+    expect(calls).toEqual(['half-main', 'half-backup'])
   })
 
   it('reports a silent model as an upstream error when there is no fallback', async () => {

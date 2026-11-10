@@ -6,7 +6,8 @@ import { WREN_SYSTEM_PROMPT } from '../../agent/persona'
 import type { ChatStreamEvent } from '../../lib/stream-events'
 
 // A stand-in for Gemini's streamGenerateContent: "ok-*" streams two chunks,
-// "slow-*" streams twenty 30 ms apart, "down-*" fails with 500. It keeps each
+// "slow-*" streams twenty 30 ms apart, "down-*" fails with 500, "half-*" breaks
+// off with a mid-stream 503. It keeps each
 // request's system instruction.
 const systems: string[] = []
 let server: Server
@@ -26,6 +27,11 @@ beforeAll(async () => {
         return res.end(JSON.stringify({ error: { code: 500, message: 'internal', status: 'INTERNAL' } }))
       }
       res.writeHead(200, { 'Content-Type': 'text/event-stream' })
+      if (model.startsWith('half-')) {
+        // Some text, then Gemini's mid-stream "overloaded".
+        res.write(chunk('Half '))
+        return res.end(`data: ${JSON.stringify({ error: { code: 503, message: 'overloaded', status: 'UNAVAILABLE' } })}\r\n\r\n`)
+      }
       if (model.startsWith('slow-')) {
         let n = 0
         const timer = setInterval(() => {
@@ -92,6 +98,19 @@ function run(model: string, extra: Partial<AnswerStreamOptions> = {}) {
   })()
   return { events, order }
 }
+
+describe('answerStream when Gemini breaks off', () => {
+  it('tells the browser to start again, saves only the new answer, and finishes it', async () => {
+    const saves: [string, string][] = []
+    const { events } = run('half-model', { fallbackModel: 'ok-backup', save: (text, status) => void saves.push([text, status]) })
+    const sent = await events
+    expect(sent.map((e) => e.t)).toEqual(['start', 'delta', 'restart', 'delta', 'delta', 'done'])
+    expect(saves).toEqual([
+      ['', 'partial'],
+      ['Hello there', 'done'],
+    ])
+  })
+})
 
 describe('answerStream with memory', () => {
   it('sends recall events right after start and gives the model the recalled text', async () => {

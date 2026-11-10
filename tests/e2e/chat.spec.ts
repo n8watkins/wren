@@ -93,6 +93,27 @@ test('closing the tab mid-answer stops it and keeps what was written', async ({ 
   expect(kept?.content).not.toContain('word39')
 })
 
+test('Gemini breaking off mid-answer: Wren starts the answer again once, on the fallback', async ({ page, baseURL }) => {
+  await signIn(page, baseURL!)
+  await sendMessage(page, 'mock:drop basil?')
+  const answer = page.getByTestId('answer').last()
+  await expect(answer).toHaveAttribute('data-status', 'done', { timeout: 20_000 })
+  await expect(answer.locator('.md')).toHaveText('The whole answer, from gemini-3.1-flash-lite.')
+  await expect(answer).not.toContainText('Cut off')
+  await expect(page.getByTestId('chat-error').filter({ visible: true })).toHaveCount(0)
+  await page.reload()
+  await expect(page.getByTestId('answer').last().locator('.md')).toHaveText('The whole answer, from gemini-3.1-flash-lite.')
+})
+
+test('when the retry breaks off too, the answer is marked cut off with what was written', async ({ page, baseURL }) => {
+  await signIn(page, baseURL!)
+  await sendMessage(page, 'mock:dropall basil?')
+  const answer = page.getByTestId('answer').last()
+  await expect(answer).toHaveAttribute('data-status', 'error', { timeout: 20_000 })
+  await expect(answer).toContainText('Cut off')
+  await expect(answer.locator('.md')).toHaveText('Cut short here')
+})
+
 test('hostile model output renders as text, never as HTML', async ({ page, baseURL }) => {
   await signIn(page, baseURL!)
   await sendMessage(page, 'mock:xss')

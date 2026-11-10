@@ -6,7 +6,8 @@ import type { AutoSave, RecalledMemory } from './memory'
 /**
  * The chat stream (POST /api/chat): one JSON object per line.
  * start: the chat (new or existing), the saved user message and the id the
- * answer will have; delta: more answer text; done or error: the end.
+ * answer will have; delta: more answer text; restart: start the text again;
+ * done or error: the end.
  */
 export type ChatStreamEvent =
   | {
@@ -19,6 +20,8 @@ export type ChatStreamEvent =
     }
   | { t: 'recall'; messageId: string; memories: RecalledMemory[] }
   | { t: 'delta'; text: string }
+  /** Gemini broke off and the answer starts again from the beginning: drop the text so far. */
+  | { t: 'restart' }
   | { t: 'done'; status: 'done' | 'stopped' }
   | { t: 'error'; code: ErrorCode }
   | { t: 'memory'; messageId: string; saves: AutoSave[] }
