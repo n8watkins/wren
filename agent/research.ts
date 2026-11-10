@@ -34,11 +34,11 @@ import {
   samePageKey,
   titleFor,
 } from './research-text'
-import { searchWeb, type BackupReason, type WebSearch } from './web-search'
+import { searchWeb, type WebSearch } from './web-search'
 import type { ErrorCode } from '../lib/errors'
 import { DAILY_LIMITS, RESEARCH_LIMITS, utcDay } from '../lib/limits'
 import { log } from '../lib/log'
-import { RUN_FAILURES, isActive, type RunDetail, type RunFailure, type RunStreamEvent, type RunSummary } from '../lib/research'
+import { RUN_FAILURES, isActive, providerName, type RunDetail, type RunFailure, type RunStreamEvent, type RunSummary } from '../lib/research'
 import { optionalSetting } from '../lib/secrets'
 import { SKIP_REASONS, checkUrl, fetchPage, type PageResult } from '../lib/web/fetch-page'
 import { tidy } from '../lib/web/page-text'
@@ -107,17 +107,10 @@ function failureOf(error: unknown): RunFailure {
   return 'model_error'
 }
 
-const BACKUP_NOTES: Record<BackupReason, string> = {
-  no_key: 'Google Search',
-  out_of_credits: 'Google Search (Tavily is out of credits)',
-  rejected: 'Google Search (Tavily rejected the key)',
-  error: 'Google Search (Tavily didn’t answer)',
-}
-
 function resultsLine(search: WebSearch): string {
   const count = search.results.length
   const what = count === 1 ? '1 result' : `${count} results`
-  return `${what} from ${search.provider === 'tavily' ? 'Tavily' : BACKUP_NOTES[search.backupReason ?? 'no_key']}`
+  return `${what} from ${providerName(search.provider, search.backupReason ?? null)}`
 }
 
 /** Page text the search sent is used when there is enough of it; otherwise the page is fetched. */
@@ -194,7 +187,13 @@ export async function advanceRun(sql: Sql, runId: string, deps: ResearchDeps, no
         }
         if (!unchanged()) return false
         if (search) {
-          addStep(sql, runId, { kind: 'search', label: query, detail: resultsLine(search) })
+          addStep(sql, runId, {
+            kind: 'search',
+            label: query,
+            detail: resultsLine(search),
+            provider: search.provider,
+            backupReason: search.backupReason ?? null,
+          })
           search.results.forEach((result, position) => {
             const checked = checkUrl(result.url)
             if (!checked.ok) {
@@ -308,7 +307,9 @@ export class ResearchRuns {
     private readonly sqlStorage: Sql,
     private readonly env: Cloudflare.Env,
     /** Schedules WrenAgent.researchTick for a run, now. */
-    private readonly scheduleTick: (runId: string) => Promise<void>
+    private readonly scheduleTick: (runId: string) => Promise<void>,
+    /** Told when a run has ended (done, failed or cancelled), before its watchers hear: a run started from chat lands there. */
+    private readonly ended: (runId: string) => void = () => undefined
   ) {}
 
   private get sql(): Sql {
@@ -347,6 +348,7 @@ export class ResearchRuns {
   cancel(id: string): RunDetail | null {
     if (!cancelRun(this.sql, id)) return null
     this.working.get(id)?.abort()
+    this.ended(id)
     this.notify(id)
     return runDetail(this.sql, id)
   }
@@ -403,6 +405,8 @@ export class ResearchRuns {
       more = await advanceRun(this.sql, runId, this.deps(controller.signal))
     } finally {
       this.working.delete(runId)
+      const run = getRunState(this.sql, runId)
+      if (run && !isActive(run.status)) this.ended(runId)
       this.notify(runId)
     }
     if (more) await this.scheduleTick(runId)

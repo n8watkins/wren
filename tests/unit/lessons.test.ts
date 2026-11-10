@@ -31,6 +31,7 @@ const ROUTES: Record<string, 'public' | 'session' | 'guest'> = {
   '/api/guest/usage': 'guest',
   '/api/chat': 'session',
   '/api/chat/stop': 'session',
+  '/api/chat/research': 'session',
   '/api/chats': 'session',
   '/api/chats/[id]': 'session',
   '/api/chats/[id]/messages/[messageId]/save': 'session',
@@ -102,7 +103,7 @@ describe('source rules', () => {
   })
 
   it('agent stores take no user id: the Durable Object instance is the person', () => {
-    for (const file of ['agent/chats.ts', 'agent/meter.ts', 'agent/memory-store.ts', 'agent/memory.ts', 'agent/memory-vectors.ts', 'agent/research-store.ts', 'agent/research.ts']) {
+    for (const file of ['agent/chats.ts', 'agent/meter.ts', 'agent/memory-store.ts', 'agent/memory.ts', 'agent/memory-vectors.ts', 'agent/research-store.ts', 'agent/research.ts', 'agent/chat-research.ts']) {
       expect(readFileSync(join(ROOT, file), 'utf8')).not.toMatch(/user_?id/i)
     }
   })
