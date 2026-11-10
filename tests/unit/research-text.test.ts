@@ -3,6 +3,7 @@ import { defuse, finalizeReport, parsePlan, reportRequest, samePageKey } from '.
 import { Markdown } from '../../components/Markdown'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { createElement } from 'react'
+import { linkCitations } from '../../lib/research'
 
 describe('reading the plan', () => {
   it('takes the queries from JSON', () => {
@@ -107,5 +108,20 @@ describe('the same page under two addresses', () => {
   it('ignores www, a trailing slash and the fragment', () => {
     expect(samePageKey('https://www.a.example.org/guide/#top')).toBe(samePageKey('https://a.example.org/guide'))
     expect(samePageKey('https://a.example.org/guide?page=2')).not.toBe(samePageKey('https://a.example.org/guide'))
+  })
+})
+
+describe('citations on the Runs page', () => {
+  const sources = [
+    { n: 1, url: 'https://a.example.org/one' },
+    { n: 2, url: 'https://b.example.org/wiki/Foo_(bar)' },
+  ]
+  const render = (text: string) => renderToStaticMarkup(createElement(Markdown, { text: linkCitations(text, sources) }))
+
+  it('links each [n] to its source and leaves anything else alone', () => {
+    const html = render('Claim [1][2]. Not a source [3]. A link [1](https://x.example.org).')
+    expect(html).toContain('<a href="https://a.example.org/one" target="_blank" rel="noopener noreferrer nofollow ugc">[1]</a>')
+    expect(html).toContain('href="https://b.example.org/wiki/Foo_%28bar%29"')
+    expect(html).toContain('Not a source [3].')
   })
 })

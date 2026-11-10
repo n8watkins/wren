@@ -10,6 +10,7 @@ import {
   createResearchTables,
   createRun,
   getRunState,
+  hasStep,
   listRuns,
   markCited,
   markRead,
@@ -197,7 +198,9 @@ export async function advanceRun(sql: Sql, runId: string, deps: ResearchDeps, no
           search.results.forEach((result, position) => {
             const checked = checkUrl(result.url)
             if (!checked.ok) {
-              addStep(sql, runId, { kind: 'skip', label: titleFor(result.title, result.url), detail: SKIP_REASONS[checked.reason], url: null })
+              // Said once per run, however many searches return it.
+              const label = titleFor(result.title, result.url)
+              if (!hasStep(sql, runId, 'skip', label)) addStep(sql, runId, { kind: 'skip', label, detail: SKIP_REASONS[checked.reason], url: null })
               return
             }
             addFoundPage(sql, runId, {

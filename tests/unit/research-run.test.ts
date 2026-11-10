@@ -105,7 +105,8 @@ describe('a research run', () => {
     ])
     expect(run.report).toBe('Answer [1]. More [2]. Made up.')
     expect(run.sources.filter((s) => s.cited).map((s) => s.n)).toEqual([1, 2])
-    expect(run.steps.map((s) => s.kind)).toEqual(['plan', 'search', 'skip', 'search', 'skip', 'search', 'skip', 'read', 'read', 'read', 'read', 'write'])
+    // The router turns up in every search and is skipped once.
+    expect(run.steps.map((s) => s.kind)).toEqual(['plan', 'search', 'skip', 'search', 'search', 'read', 'read', 'read', 'read', 'write'])
     expect(run.steps.find((s) => s.kind === 'skip')).toMatchObject({ label: 'Router', detail: 'a private or local address' })
     expect(run.steps.at(-1)).toMatchObject({ label: 'Wrote the report', detail: 'Cites 2 of 4 sources' })
     expect(used(sql, utcDay(), 'research')).toBe(1)

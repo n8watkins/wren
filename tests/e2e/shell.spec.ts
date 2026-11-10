@@ -42,7 +42,7 @@ test('the guest shell matches the layout for this width', async ({ page }) => {
   await noHorizontalScroll(page)
 })
 
-test('Voice, Research and Memory say they are coming, without pretending', async ({ page }) => {
+test('Voice and Memory say they are coming, without pretending; Research says where it works', async ({ page }) => {
   await skipIntro(page)
   await page.goto('/')
   const scope = page.locator(isPhone(page) ? '.mcomp' : '.composer')
@@ -54,17 +54,21 @@ test('Voice, Research and Memory say they are coming, without pretending', async
   await expect(explainer).toBeHidden()
 
   await scope.locator('[data-tip="res"]').click()
-  await expect(explainer).toContainText('How research will work')
+  await expect(explainer).toContainText('How research works')
+  await expect(explainer).toContainText('Start a run from Research runs')
+  await expect(explainer).not.toContainText('Coming in the next update')
   await page.keyboard.press('Escape')
 
-  for (const [path, testId] of [
-    ['/runs', 'runs-page'],
-    ['/memory', 'memory-page'],
-  ]) {
-    await page.goto(path)
-    await expect(page.getByTestId(testId)).toContainText('Coming in the next update')
-    await noHorizontalScroll(page)
-  }
+  await page.goto('/memory')
+  await expect(page.getByTestId('memory-page')).toContainText('Coming in the next update')
+  await noHorizontalScroll(page)
+
+  // Research works for people who sign in; a guest is asked to.
+  await page.goto('/runs')
+  await expect(page.getByTestId('runs-page')).not.toContainText('Coming in the next update')
+  await page.getByTestId('runs-sign-in').click()
+  await expect(page.getByTestId('sign-in')).toContainText('Sign in to research')
+  await noHorizontalScroll(page)
 })
 
 test('the theme switch sticks across reloads', async ({ page }) => {

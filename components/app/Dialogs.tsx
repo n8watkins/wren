@@ -51,8 +51,8 @@ export function HowItWorksDialog({
               <span className="n">2. </span>
               Ask it to research
             </b>
-            <p>Wren will search, read the pages, show each step and cite only pages it opened.</p>
-            <span className="later">Next update</span>
+            <p>Start a run in Research runs: Wren searches, reads the pages, shows each step and cites only pages it opened.</p>
+            <span className="later">From chat: next update</span>
           </div>
         </li>
         <li className="howi">

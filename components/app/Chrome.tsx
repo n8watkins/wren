@@ -136,7 +136,6 @@ export function Sidebar(props: ChromeProps) {
         <Link className={place === 'runs' ? 'nav on' : 'nav'} href="/runs" aria-current={place === 'runs' ? 'page' : undefined}>
           <Icon name="res" />
           Research runs
-          <span className="soon">Soon</span>
         </Link>
         <div className={place === 'memory' ? 'navrow on' : 'navrow'}>
           <Link className="nav" href="/memory" aria-current={place === 'memory' ? 'page' : undefined}>

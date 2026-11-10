@@ -78,3 +78,15 @@ export interface RunDetail extends RunSummary {
  * it changes, until it ends; ping keeps the connection open in between.
  */
 export type RunStreamEvent = { t: 'run'; run: RunDetail } | { t: 'ping' }
+
+/**
+ * The report as the Runs page renders it: each [n] becomes a link to source n.
+ * The addresses are ones the run read and checked (agent/research.ts).
+ */
+export function linkCitations(report: string, sources: Pick<RunSource, 'n' | 'url'>[]): string {
+  const byNumber = new Map(sources.map((s) => [s.n, s.url.replace(/\(/g, '%28').replace(/\)/g, '%29')]))
+  return report.replace(/\[(\d{1,3})\](?!\()/g, (whole, n: string) => {
+    const url = byNumber.get(Number(n))
+    return url ? `[\\[${n}\\]](${url})` : whole
+  })
+}

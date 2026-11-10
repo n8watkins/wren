@@ -184,6 +184,10 @@ export function addStep(
   )
 }
 
+export function hasStep(sql: Sql, runId: string, kind: StepKind, label: string): boolean {
+  return sql.exec<{ n: number }>('SELECT COUNT(*) AS n FROM research_steps WHERE run_id = ? AND kind = ? AND label = ?', runId, kind, label).toArray()[0].n > 0
+}
+
 /** Adds a page a search found, unless the run already has it. Returns whether it was new. */
 export function addFoundPage(
   sql: Sql,
