@@ -92,7 +92,7 @@ Read this before changing product, design or workflow, and add every new decisio
   - The Memory page's search: 0.68, or 0.60 with a lead of 0.05 over the median of the closest 20.
     Precision 0.89, recall 0.72, and an off-topic search showed something 0.7% of the time; the old 0.6 showed something for 66% of them, at precision 0.09.
   - The extractor's look at what is already saved: 0.62 (corrections scored 0.71 to 0.80 against what they correct, so it keeps every one, and shows fewer unrelated memories to choose from).
-- **Research runs** (2026-11-09, phase 3 engine and the Runs page; starting a run from chat comes next).
+- **Research runs** (2026-11-09, phase 3 engine and the Runs page; started from chat since 2026-11-10, below).
   A run lives in the person's own agent (`agent/research.ts`, tables in `agent/research-store.ts`): plan 3 to 5 searches with the chat model, search each one, read up to 8 pages (at most 2 per site, 12 tries), then write a Markdown report where every `[n]` is a page the run read.
   It is a small state machine saved in SQLite, and each step is its own scheduled callback (the Agents SDK's `schedule`) doing one bounded piece of work: one model call, one search or one page.
   The SDK keeps a callback until it finishes, so a restart in the middle of a step runs that step again from the saved state, and a step writes only if the run is still where it found it, so nothing is saved twice; a run that stops moving for 90 s gets its next step scheduled again when it is looked at, and one still going after 10 minutes is stopped.
@@ -100,6 +100,17 @@ Read this before changing product, design or workflow, and add every new decisio
   The Runs page watches a run through one NDJSON stream (`GET /api/runs/:id/stream`) rather than polling, because polling every second or two would use up the per-person burst limit (12 requests a minute); the stream sends the whole run after every step and reconnects if it drops.
   Budget: one run at a time and the existing 3 a day, signed in only, never counted against messages; a run that ends without a report is given back, a cancelled one is not (its searches were already paid for).
   Research always uses the demo Gemini key: a person's own key lives only in their browser, and a run carries on after the tab closes.
+- **Research in chat** (2026-11-10, phase 3; `agent/chat-research.ts`, `components/app/ResearchCard.tsx`).
+  Research in the composer is a mode, not a separate box: turned on (saffron), what you send starts a run in this chat (`POST /api/chat/research`) instead of a message, behind the same per-person 3 a day and per-network caps, and it turns itself off once the run starts.
+  "Research this" on an answer puts the question that answer was for into the composer with research on, rather than starting at once: with 3 runs a day, a run should never start from a stray click, and a follow-up like "tell me more" usually needs rewording first.
+  A run started from chat adds two messages, your question (marked Research) and Wren's message for the run, linked to the run in `chat_research`.
+  While the run goes, that message is a saffron card watching the run's stream (the Runs page's watch, shared in `components/app/RunParts.tsx`): its status, what it searched and read, which service searched, Stop and a link to the full run; a reload, or the chat opened elsewhere, reattaches to it.
+  When the run ends, the agent writes the report into the message (on the run's end, and again on any chat load that finds a finished run still waiting), and keeps its sources and which service searched beside it, so the report stays in the chat after the run is trimmed from the Runs page.
+  The report is rendered like the Runs page's (sanitized Markdown, no HTML or images, links only to pages it read), and in the conversation the model sees it is Wren's turn, as "Research report on <question>", the report and its sources, capped at 8,000 characters (`RESEARCH_LIMITS.chatHistoryChars`), so the chat can carry on about it; a run still going, failed or stopped adds nothing.
+  A report is not regenerated as a chat answer; a failed run offers Try again.
+  "Save findings to memory" uses the Save to Memory path (the request's key and IP, inside memory's caps, saved once) with a note written for it: "Research: <question>", the report as plain text, and the pages it cites with their addresses, shortening the report and never the sources to fit a note's 4,000 characters.
+  Each search step records which service answered it (`provider`, `backup_reason`, added to existing tables on start), so the card and report say "Searched with Tavily" or, when Tavily is down, "Searched with Google Search (Tavily is out of credits)".
+  Checked with real Tavily and gemini-3.5-flash-lite: a run from chat on buying a used electric car took 27 s, read 8 pages and cited 7, and a follow-up question was answered from the report.
 - **Search: Tavily, then Gemini's Google Search** (`agent/web-search.ts`).
   Tavily is asked for each result's page text, which the run uses instead of fetching when there is enough of it; the backup takes over when there is no `TAVILY_API_KEY` (optional, read through `lib/secrets.ts`), Tavily is out of credits (432, 433, 429), rejects the key, or fails.
   Which one served each search is logged (`provider`) and shown in the run.

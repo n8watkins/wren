@@ -4,10 +4,10 @@ An AI assistant you can type or talk to, that researches the web for you and rem
 A portfolio project by Nathan Watkins, live at https://wren.n8builds.dev.
 
 Phase 1 is live in this repo: the app shell, sign-in with GitHub or an email link, streaming chat with Gemini, a daily usage meter, and your own Gemini key.
-The Memory library is in: save notes, links and files and find them by meaning.
-Research runs work from the Runs page: Wren plans searches, reads the pages and writes a report that cites only what it read.
+The Memory library is in: save notes, links and files and find them by meaning, and Wren uses what matters in chat.
+Research works from chat: turn on Research in the composer and ask, watch the run live, and the report lands in the chat with its sources, citing only pages it read; the Runs page keeps every run.
 Voice is in: tap the mic and talk with Wren through Gemini Live, interrupt it by talking, and every spoken turn lands in the same chat as text.
-Memory and research in chat come next.
+Launch comes next.
 
 ## Stack
 
