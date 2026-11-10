@@ -196,6 +196,9 @@ Read this before changing product, design or workflow, and add every new decisio
   So a session costs about 2 calls per batch (plus 1 per fact saved), 1 per substantive answer when the person has facts, and 1 per search or save: a 40-turn session is about 8 batches (16 to 20 calls) plus up to 40 facts checks, against about 120 to 160 calls with typed chat's work after every turn.
   Every call carries the session's key (the person's own, or the demo key) and the ticket's network, so it counts in the same daily memory allowances as chat; when they run out, search finds nothing and the after-answer work saves nothing, and voice carries on without a word about it.
 - **Plain CSS with design tokens** (`app/globals.css`) rather than a component kit, to match the mockups exactly.
+- **A visitor leaving ends their stream** (2026-11-10): the `enable_request_signal` compatibility flag (the default from 2026-11-17) makes `request.signal` fire when the visitor disconnects, and `worker/index.ts` passes it to OpenNext, which then ends the Next response.
+  That cancels the route's body, so the agent's stream sees `cancel`: a typed answer stops and keeps what was written, and a run watch lets go.
+  Without it OpenNext kept writing into the closed response ("Uncaught TypeError: Unable to enqueue") while the answer ran on and used its tokens (`tests/e2e/chat.spec.ts`, "closing the tab mid-answer").
 - **No incremental cache**: every page depends on who is signed in and carries a fresh CSP nonce, so OpenNext needs no R2 cache.
 
 ## Engineering

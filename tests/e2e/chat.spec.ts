@@ -61,6 +61,38 @@ test('stop ends the answer and keeps what was written', async ({ page, baseURL }
   expect(await page.getByTestId('answer').last().locator('.md').innerText()).not.toContain('word39')
 })
 
+test('closing the tab mid-answer stops it and keeps what was written', async ({ page, baseURL }) => {
+  await signIn(page, baseURL!)
+  // The browser reads the start and a few words, then goes away (the tab closing).
+  const chatId = await page.evaluate(async () => {
+    const leave = new AbortController()
+    const response = await fetch('/api/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text: 'mock:slow please' }),
+      signal: leave.signal,
+    })
+    const reader = response.body!.getReader()
+    const decoder = new TextDecoder()
+    let read = ''
+    while (!read.includes('word2')) read += decoder.decode((await reader.read()).value, { stream: true })
+    leave.abort()
+    return (JSON.parse(read.split('\n')[0]) as { chat: { id: string } }).chat.id
+  })
+  // The answer stops there: saved as stopped, and it doesn't grow while the
+  // rest of the 40 words (6 s) would have streamed.
+  const answer = async () => {
+    const chat = (await (await page.request.get(`/api/chats/${chatId}`)).json()) as { messages: { role: string; status: string; content: string }[] }
+    return chat.messages.find((message) => message.role === 'model')
+  }
+  await expect.poll(async () => (await answer())?.content, { timeout: 4_000 }).toContain('word2')
+  const kept = await answer()
+  await page.waitForTimeout(2_500)
+  expect(await answer()).toEqual(kept)
+  expect(kept?.status).toBe('stopped')
+  expect(kept?.content).not.toContain('word39')
+})
+
 test('hostile model output renders as text, never as HTML', async ({ page, baseURL }) => {
   await signIn(page, baseURL!)
   await sendMessage(page, 'mock:xss')
