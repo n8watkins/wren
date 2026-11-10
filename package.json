@@ -40,7 +40,7 @@
   },
   "devDependencies": {
     "@playwright/test": "^1.65.0",
-    "@types/node": "^24.19.2",
+    "@types/node": "^26.6.6",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "@types/ws": "^8.18.2",
@@ -48,7 +48,7 @@
     "eslint-config-next": "16.4.5",
     "knip": "^6.44.2",
     "release-kit": "github:n8watkins/release-kit#v2.9.0",
-    "typescript": "~6.0.3",
+    "typescript": "~7.0.2",
     "vitest": "^5.1.0",
     "wrangler": "^4.158.0",
     "ws": "^8.22.1"
