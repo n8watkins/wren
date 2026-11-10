@@ -5,6 +5,8 @@
 //   "mock:slow ..."     streams 40 chunks, 150 ms apart (for Stop)
 //   "mock:xss"          answers with hostile Markdown and HTML
 //   "mock:fail"         a 500 before any text
+//   "mock:stall"        the chat model (gemini-3.5-flash-lite) never answers;
+//                       any other model (the fallback) says which it is
 //   "mock:history"      repeats how Wren's previous turn began, and whether it
 //                       holds a report's sources (research in chat)
 //   anything about a heat pump: a realistic Markdown answer (for screenshots)
@@ -201,6 +203,12 @@ const server = createServer((req, res) => {
       res.writeHead(500, { 'Content-Type': 'application/json' })
       res.end(JSON.stringify({ error: { code: 500, message: 'internal', status: 'INTERNAL' } }))
       return
+    }
+    if (last.startsWith('mock:stall')) {
+      const model = /models\/([^:]+):/.exec(req.url ?? '')?.[1] ?? ''
+      // The chat model hangs with the connection open, as a stalled model does.
+      if (model === 'gemini-3.5-flash-lite') return
+      return sse(res, [`Answered by ${model}.`], 10)
     }
     if (last.startsWith('mock:xss')) return sse(res, [XSS], 10)
     if (last.startsWith('mock:history')) {
