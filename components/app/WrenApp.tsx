@@ -19,6 +19,7 @@ import { ConfirmDeleteDialog, ExplainerDialog, HowItWorksDialog, KeyDialog, Sign
 import { Runs } from './Runs'
 import { Thread, type StreamingAnswer } from './Thread'
 import { Tips } from './Tips'
+import { useVoice } from './useVoice'
 
 export interface WrenAppProps {
   person: Person | null
@@ -118,9 +119,9 @@ export function WrenApp({ person, github, initialChats, initialUsage, guestSiteK
   const [loadedChatId, setLoadedChatId] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [streaming, setStreaming] = useState<StreamingAnswer | null>(null)
-  const [error, setErrorState] = useState<{ message: string; signIn: boolean } | null>(null)
-  const setError = useCallback((message: string | null, signIn = false) => {
-    setErrorState(message === null ? null : { message, signIn })
+  const [error, setErrorState] = useState<{ message: string; signIn: boolean; info?: boolean } | null>(null)
+  const setError = useCallback((message: string | null, signIn = false, info = false) => {
+    setErrorState(message === null ? null : { message, signIn, info })
   }, [])
   const failWith = (failure: unknown) => {
     const code = failure instanceof ApiError ? failure.code : 'internal'
@@ -370,9 +371,56 @@ export function WrenApp({ person, github, initialChats, initialUsage, guestSiteK
     }
   }
 
+  /*
+   * Voice (components/app/useVoice.ts): spoken turns land in this chat as
+   * they are saved, a new chat gets its address like a typed one, and moving
+   * to another chat or page ends the session.
+   */
+  const voiceChatRef = useRef<string | null>(null)
+  const voice = useVoice({
+    onMessage: (chat, message) => {
+      setChats((list) => [{ ...chat, updatedAt: Date.now() }, ...list.filter((c) => c.id !== chat.id)])
+      if (voiceChatRef.current !== chat.id) {
+        voiceChatRef.current = chat.id
+        newChatRef.current = chat.id
+        setLoadedChatId(chat.id)
+        window.history.replaceState(null, '', `/chat/${chat.id}`)
+      }
+      setMessages((list) => (list.some((m) => m.id === message.id) ? list : [...list, message]))
+    },
+    onUsage: setUsage,
+    onEnded: (problem) => {
+      voiceChatRef.current = null
+      if (problem) setError(problem.message, problem.signIn, problem.info)
+      refreshUsage()
+    },
+  })
+  const voiceOn = voice.view !== null
+  const stopVoice = voice.stop
+  useEffect(() => {
+    if (voiceOn && (place !== 'chat' || chatId !== voiceChatRef.current)) stopVoice()
+  }, [voiceOn, place, chatId, stopVoice])
+
+  const toggleVoice = () => {
+    if (voice.view) return voice.stop()
+    if (!person) {
+      setModal({ kind: 'sign-in', reason: errorMessage('voice_sign_in') })
+      return
+    }
+    setError(null)
+    voiceChatRef.current = chatId
+    voice.start({ chatId, userKey })
+  }
+
   const send = () => {
     const text = draft.trim()
-    if (!text || streaming) return
+    if (!text) return
+    // While talking, a typed message goes to the voice session and Wren answers out loud.
+    if (voice.view && voice.sendText(text)) {
+      setDraft('')
+      return
+    }
+    if (streaming) return
     setDraft('')
     void run({ text })
   }
@@ -554,6 +602,8 @@ export function WrenApp({ person, github, initialChats, initialUsage, guestSiteK
             onSend={send}
             onStop={stop}
             onExplain={explain}
+            voice={voice.view}
+            onMic={toggleVoice}
             focusKey={focusKey}
           />
         )}

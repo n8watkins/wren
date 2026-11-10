@@ -458,10 +458,22 @@ export async function connectLive(options: LiveOptions, events: LiveEvents): Pro
   }
 
   const decoder = new TextDecoder()
+  // Gemini sends JSON in binary frames, which may arrive as a Blob; reading one
+  // is async, so frames are handled in order through one queue.
+  const frameText = async (data: unknown): Promise<string> => {
+    if (typeof data === 'string') return data
+    if (data instanceof ArrayBuffer || ArrayBuffer.isView(data)) return decoder.decode(data)
+    if (data instanceof Blob) return data.text()
+    return ''
+  }
+  let frames = Promise.resolve()
   socket.addEventListener('message', (event) => {
+    frames = frames.then(async () => handle(await frameText(event.data))).catch(() => undefined)
+  })
+  const handle = (text: string) => {
     let message: LiveServerMessage
     try {
-      message = JSON.parse(typeof event.data === 'string' ? event.data : decoder.decode(event.data as ArrayBuffer)) as LiveServerMessage
+      message = JSON.parse(text) as LiveServerMessage
     } catch {
       return
     }
@@ -489,13 +501,16 @@ export async function connectLive(options: LiveOptions, events: LiveEvents): Pro
     if (content.outputTranscription?.text) events.outputText(content.outputTranscription.text)
     if (content.interrupted) events.interrupted()
     if (content.turnComplete) events.turnComplete()
-  })
+  }
   socket.addEventListener('close', (event) => {
     clearTimeout(timer)
-    const failure = classifyLiveClose(event.code, event.reason, options.keySource)
-    if (!ready) settle?.reject(failure)
-    else events.closed(closedByUs ? undefined : failure)
-    closedByUs = true
+    // After the frames before it.
+    frames = frames.then(() => {
+      const failure = classifyLiveClose(event.code, event.reason, options.keySource)
+      if (!ready) settle?.reject(failure)
+      else events.closed(closedByUs ? undefined : failure)
+      closedByUs = true
+    })
   })
   socket.addEventListener('error', () => {
     clearTimeout(timer)

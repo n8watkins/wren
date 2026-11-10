@@ -384,7 +384,18 @@ export function acceptVoice(build: (client: VoiceClient) => VoiceRelay): Respons
     send: (data) => server.send(data),
     close: (code, reason) => server.close(code, reason),
   })
-  server.addEventListener('message', (event) => void relay.receive(event.data))
+  // Binary frames may arrive as a Blob, which is read asynchronously: one queue keeps them in order.
+  let frames = Promise.resolve()
+  server.addEventListener('message', (event) => {
+    const data: unknown = event.data
+    frames = frames
+      .then(async () => {
+        if (typeof data === 'string' || data instanceof ArrayBuffer) return relay.receive(data)
+        if (ArrayBuffer.isView(data)) return relay.receive(data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength) as ArrayBuffer)
+        if (data instanceof Blob) return relay.receive(await data.arrayBuffer())
+      })
+      .catch(() => relay.clientGone())
+  })
   server.addEventListener('close', () => relay.clientGone())
   server.addEventListener('error', () => relay.clientGone())
   return new Response(null, { status: 101, webSocket: browser })
