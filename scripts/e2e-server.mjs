@@ -7,6 +7,8 @@
 // guest cap is low, and the burst limits are raised so parallel tests from one
 // IP aren't throttled
 // (the limits themselves are Cloudflare's; the daily meter is tested as is).
+// --test-scheduled adds wrangler's /__scheduled, so the daily model check
+// (the cron) can run against the mocks; production has no such route.
 // E2E_SKIP_BUILD=1 reuses the last build.
 import { execFileSync, spawn } from 'node:child_process'
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
@@ -60,7 +62,7 @@ const run = (cmd, args) => execFileSync(cmd, args, { stdio: 'inherit' })
 if (!process.env.E2E_SKIP_BUILD) run('npx', ['opennextjs-cloudflare', 'build'])
 run('npx', ['wrangler', 'd1', 'migrations', 'apply', 'wren', '--local', '-c', `${dir}/wrangler.jsonc`, '--persist-to', state])
 
-const server = spawn('npx', ['wrangler', 'dev', '-c', `${dir}/wrangler.jsonc`, '--ip', host, '--port', port, '--persist-to', state, '--log-level', 'warn'], {
+const server = spawn('npx', ['wrangler', 'dev', '-c', `${dir}/wrangler.jsonc`, '--ip', host, '--port', port, '--persist-to', state, '--log-level', 'warn', '--test-scheduled'], {
   stdio: 'inherit',
 })
 for (const signal of ['SIGINT', 'SIGTERM']) process.on(signal, () => server.kill(signal))

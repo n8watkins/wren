@@ -26,7 +26,7 @@ export interface WebSearch {
   backupReason?: BackupReason
 }
 
-class TavilyError extends Error {
+export class TavilyError extends Error {
   constructor(readonly status: number | undefined) {
     super(`tavily ${status ?? 'network'}`)
     this.name = 'TavilyError'
@@ -40,11 +40,20 @@ interface TavilyResponse {
   results?: { url?: unknown; title?: unknown; content?: unknown; raw_content?: unknown }[]
 }
 
-/** One Tavily search, with each result's page text. Throws TavilyError. */
+/** One Tavily search, with each result's page text unless `pageText` is false. Throws TavilyError. */
 export async function tavilySearch(
   query: string,
-  options: { apiKey: string; baseUrl?: string; signal?: AbortSignal; fetchImpl?: typeof fetch }
+  options: {
+    apiKey: string
+    baseUrl?: string
+    signal?: AbortSignal
+    fetchImpl?: typeof fetch
+    /** Fewer results (the daily model check asks for one). */
+    maxResults?: number
+    pageText?: boolean
+  }
 ): Promise<SearchResult[]> {
+  const maxResults = Math.min(options.maxResults ?? RESEARCH_LIMITS.resultsPerSearch, RESEARCH_LIMITS.resultsPerSearch)
   const timeout = AbortSignal.timeout(TAVILY_TIMEOUT_MS)
   const signal = options.signal ? AbortSignal.any([options.signal, timeout]) : timeout
   let response: Response
@@ -55,9 +64,9 @@ export async function tavilySearch(
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${options.apiKey}` },
       body: JSON.stringify({
         query,
-        max_results: RESEARCH_LIMITS.resultsPerSearch,
+        max_results: maxResults,
         search_depth: 'basic',
-        include_raw_content: 'text',
+        include_raw_content: options.pageText === false ? false : 'text',
         include_answer: false,
         include_images: false,
       }),
@@ -77,7 +86,7 @@ export async function tavilySearch(
   }
   return (body.results ?? [])
     .filter((r) => typeof r.url === 'string')
-    .slice(0, RESEARCH_LIMITS.resultsPerSearch)
+    .slice(0, maxResults)
     .map((r) => ({
       url: r.url as string,
       title: typeof r.title === 'string' ? r.title : '',

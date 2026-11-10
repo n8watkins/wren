@@ -20,10 +20,21 @@
       { "name": "WREN_AGENT", "class_name": "WrenAgent" },
       // Daily counters keyed by something other than a person
       // (agent/daily-counter.ts): per client IP, per email address.
-      { "name": "DAILY_COUNTER", "class_name": "DailyCounter" }
+      { "name": "DAILY_COUNTER", "class_name": "DailyCounter" },
+      // The daily model check's last result (agent/model-check-store.ts), one
+      // instance, read by /api/health.
+      { "name": "MODEL_CHECK", "class_name": "ModelCheck" }
     ]
   },
-  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["WrenAgent", "DailyCounter"] }],
+  "migrations": [
+    { "tag": "v1", "new_sqlite_classes": ["WrenAgent", "DailyCounter"] },
+    { "tag": "v2", "new_sqlite_classes": ["ModelCheck"] }
+  ],
+  // Once a day (14:00 UTC, early morning in the US): one tiny real call to each
+  // model and search service Wren depends on (agent/model-check.ts), saved for
+  // /api/health. Cron only: no route runs it. `wrangler dev --test-scheduled`
+  // runs it locally at /__scheduled.
+  "triggers": { "crons": ["0 14 * * *"] },
   // Burst limits before any work is done (lib/server/rate-limit.ts). Keys are
   // the verified session's user id or CF-Connecting-IP, never a client value.
   "ratelimits": [
