@@ -318,6 +318,9 @@ export function WrenApp({ person, github, initialChats, initialUsage, guestSiteK
         else if (event.t === 'delta') {
           answer += event.text
           setStreaming((current) => (current ? { ...current, text: answer } : current))
+        } else if (event.t === 'restart') {
+          answer = ''
+          setStreaming((current) => (current ? { ...current, text: '', restarted: true } : current))
         } else if (event.t === 'done') finished = event.status
         else if (event.t === 'error') {
           finished = 'error'
@@ -418,6 +421,9 @@ export function WrenApp({ person, github, initialChats, initialUsage, guestSiteK
         } else if (event.t === 'delta') {
           text += event.text
           setStreaming((s) => (s ? { ...s, text } : s))
+        } else if (event.t === 'restart') {
+          text = ''
+          setStreaming((s) => (s ? { ...s, text: '', restarted: true } : s))
         } else if (event.t === 'done') {
           finished = event.status
           settle()

@@ -89,3 +89,13 @@ test('signed-in people never run the guest check', async ({ page, baseURL }) => 
   await page.waitForLoadState('networkidle')
   expect(starts).toEqual([])
 })
+
+test('a guest whose answer Gemini breaks off gets the whole answer, started again', async ({ page }) => {
+  await skipIntro(page)
+  await page.goto('/')
+  await sendMessage(page, 'mock:drop how do I keep basil fresh?')
+  const answer = page.getByTestId('answer').last()
+  await expect(answer).toHaveAttribute('data-status', 'done', { timeout: 20_000 })
+  await expect(answer.locator('.md')).toHaveText('The whole answer, from gemini-3.1-flash-lite.')
+  await expect(answer).not.toContainText('Cut off')
+})

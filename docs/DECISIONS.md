@@ -82,7 +82,11 @@ Read this before changing product, design or workflow, and add every new decisio
   Closing the tab or pressing Stop ends the answer and keeps what was written.
   Moving typed chat onto the agent's WebSocket, with resumable streams, is a later step of its own (2026-11-10).
 - **Gemini** through `@google/genai`: `gemini-3.5-flash-lite`, with `gemini-3.1-flash-lite` as the backup (owner, 2026-11-09), set in `wrangler.jsonc` (`GEMINI_MODEL`, `GEMINI_FALLBACK_MODEL`).
-  The backup is tried once when the first model fails or sends no text within 10 s; a rejected key is never retried, and an answer that already started is never restarted (`agent/gemini.ts`).
+  The backup is tried once when the first model fails or sends no text within 10 s; a rejected key is never retried (`agent/gemini.ts`).
+  An answer that breaks off after it started is written again once, from the beginning (coordinator, 2026-11-10; it used to be shown cut off): on 2026-11-10 guests saw "Cut off" answers on the live site, and the logs showed `gemini-3.5-flash-lite` sending Gemini's mid-stream 503 ("overloaded") after its first words.
+  The new attempt goes to the backup (or the same model when it is the last one); the browser drops the words so far and shows "Gemini broke off, starting again" while the new answer streams (a `restart` stream event), and the saved copy is replaced, so a reload never mixes the two.
+  Starting again beats a "Continue" button: the person does nothing, the answer reads as one piece rather than a seam where a new model guessed the rest, and the cost is one more call, made only when Gemini already failed.
+  A second break shows the answer cut off with what was written, as before; the person's meter isn't charged twice.
   The 10 s wait (owner, 2026-11-10; it was 20 s) comes from the daily model check's first real runs: `gemini-3.5-flash-lite` started a reply in 2 to 9 s when it was working, so 10 s clears every normal start, while a stalled answer switches to `gemini-3.1-flash-lite` 10 s sooner.
   The last model tried (the backup, or the only model) keeps 20 s, because there is nothing left to switch to and `gemini-3.1-flash-lite` took up to 20 s in the same runs.
   It replaced `gemini-3.8-flash`, which stopped answering on the live site (no response within 40 s) while both lite models answered in about a second.

@@ -35,7 +35,7 @@ export interface StreamReplyOptions {
   apiKey: string
   keySource: KeySource
   model: string
-  /** Tried once when `model` fails or stays silent before any text. */
+  /** Tried once when `model` fails or stays silent before any text, or breaks off after it. */
   fallbackModel?: string
   /** How long a model may take to send its first text before it counts as failed (tests shorten it). */
   firstTextMs?: FirstTextWait
@@ -44,6 +44,11 @@ export interface StreamReplyOptions {
   signal: AbortSignal
   /** Tests point this at a local mock of the Gemini API (playwright.config.ts). */
   baseUrl?: string
+  /**
+   * The answer broke off and starts again from the beginning: drop the text
+   * streamed so far. Called before the new attempt's first chunk.
+   */
+  onRestart?: () => void
 }
 
 /** Maps an upstream failure to what the person is told. */
@@ -82,14 +87,20 @@ function worthAnotherModel(error: GeminiError): boolean {
 
 /**
  * Streams the answer as text chunks. Tries `model`, then `fallbackModel` once
- * if the first failed before any text. Throws GeminiError.
+ * if the first failed before any text. An answer that breaks off after it
+ * started (Gemini's mid-stream 503 "overloaded") starts again once from the
+ * beginning, on the fallback (or the same model when it is the last one):
+ * `onRestart` tells the caller to drop the partial text. A second break, or
+ * one that another model can't fix (a bad key), throws. Throws GeminiError.
  */
 export async function* streamReply(options: StreamReplyOptions): AsyncGenerator<string> {
   const models = [options.model]
   if (options.fallbackModel && options.fallbackModel !== options.model) models.push(options.fallbackModel)
   let failure: GeminiError | undefined
+  let restarted = false
   const wait = options.firstTextMs ?? FIRST_TEXT_MS
-  for (const [i, model] of models.entries()) {
+  for (let i = 0; i < models.length; i++) {
+    const model = models[i]
     let sentText = false
     try {
       for await (const text of streamModel(options, model, i < models.length - 1 ? wait.beforeFallback : wait.last)) {
@@ -100,7 +111,16 @@ export async function* streamReply(options: StreamReplyOptions): AsyncGenerator<
     } catch (error) {
       if (options.signal.aborted) return
       failure = error instanceof GeminiError ? error : classifyGeminiError(error, options.keySource)
-      if (sentText || !worthAnotherModel(failure)) throw failure
+      if (!worthAnotherModel(failure)) throw failure
+      if (sentText) {
+        if (restarted) throw failure
+        restarted = true
+        log.warn('chat.answer_restarted', { model, code: failure.code, upstreamStatus: failure.upstreamStatus, keySource: options.keySource })
+        options.onRestart?.()
+        // The last model starts again itself; otherwise the next one takes over.
+        if (i === models.length - 1) i--
+        continue
+      }
       log.warn('chat.model_failed', { model, code: failure.code, upstreamStatus: failure.upstreamStatus, keySource: options.keySource })
     }
   }

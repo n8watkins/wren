@@ -5,6 +5,7 @@ import type { ChatMessage } from '@/agent/chats'
 import type { RecalledMemory } from '@/lib/memory'
 import type { RunDetail } from '@/lib/research'
 import { Icon } from '../Icons'
+import { closeOpenMarkdown } from '@/lib/markdown-stream'
 import { Markdown } from '../Markdown'
 import { WrenMark } from '../WrenMark'
 import { RecallChips, SaveToMemory, SavedLines, type ThreadMemory } from './ChatMemory'
@@ -15,6 +16,8 @@ export interface StreamingAnswer {
   text: string
   /** The memories Wren recalled for this answer (signed in). */
   recalled?: RecalledMemory[]
+  /** Gemini broke off and the answer is being written again from the start. */
+  restarted?: boolean
 }
 
 function Answer({
@@ -26,7 +29,11 @@ function Answer({
   onRegenerate,
   onResearchThis,
 }: {
-  message: Pick<ChatMessage, 'id' | 'content' | 'memory'> & { status: ChatMessage['status'] | 'streaming'; recalled?: RecalledMemory[] }
+  message: Pick<ChatMessage, 'id' | 'content' | 'memory'> & {
+    status: ChatMessage['status'] | 'streaming'
+    recalled?: RecalledMemory[]
+    restarted?: boolean
+  }
   streaming: boolean
   isLast: boolean
   busy: boolean
@@ -52,9 +59,14 @@ function Answer({
         <span>Wren</span>
         {message.status === 'stopped' && <span className="st">Stopped</span>}
         {message.status === 'error' && <span className="st err">Cut off</span>}
+        {streaming && message.restarted && (
+          <span className="st" data-testid="answer-restarted">
+            Gemini broke off, starting again
+          </span>
+        )}
       </div>
       <div className="md">
-        {message.content ? <Markdown text={message.content} /> : null}
+        {message.content ? <Markdown text={streaming ? closeOpenMarkdown(message.content) : message.content} /> : null}
         {streaming && <span className="caret" aria-hidden="true" />}
       </div>
       {/* Under the answer, where reading ends: chips that arrive after it don't move the text. */}
@@ -172,7 +184,7 @@ export function Thread({
         )}
         {streaming && (
           <Answer
-            message={{ id: 'streaming', content: streaming.text, status: 'streaming', recalled: streaming.recalled }}
+            message={{ id: 'streaming', content: streaming.text, status: 'streaming', recalled: streaming.recalled, restarted: streaming.restarted }}
             streaming
             isLast={false}
             busy

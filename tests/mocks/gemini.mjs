@@ -7,6 +7,10 @@
 //   "mock:fail"         a 500 before any text
 //   "mock:stall"        the chat model (gemini-3.5-flash-lite) never answers;
 //                       any other model (the fallback) says which it is
+//   "mock:drop"         the chat model (gemini-3.5-flash-lite) streams a few
+//                       words, then Gemini's mid-stream 503 ("overloaded");
+//                       any other model (the fallback) answers in full
+//   "mock:dropall"      every model breaks off like that
 //   "mock:history"      repeats how Wren's previous turn began, and whether it
 //                       holds a report's sources (research in chat)
 //   anything about a heat pump: a realistic Markdown answer (for screenshots)
@@ -156,6 +160,17 @@ function memoryCall(req, res, body) {
   return json(res, 200, { candidates: [{ content: { role: 'model', parts: [{ text: JSON.stringify(answer) }] }, index: 0 }] })
 }
 
+/** Some text, then the error Gemini sends inside a stream when the model is overloaded. */
+function dropMidStream(res, chunks) {
+  res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache' })
+  for (const text of chunks) {
+    res.write(`data: ${JSON.stringify({ candidates: [{ content: { role: 'model', parts: [{ text }] }, index: 0 }] })}\r\n\r\n`)
+  }
+  setTimeout(() => {
+    res.end(`data: ${JSON.stringify({ error: { code: 503, message: 'The model is overloaded. Please try again later.', status: 'UNAVAILABLE' } })}\r\n\r\n`)
+  }, 60)
+}
+
 function sse(res, chunks, delay) {
   res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache' })
   let i = 0
@@ -210,6 +225,11 @@ const server = createServer((req, res) => {
       // The chat model hangs with the connection open, as a stalled model does.
       if (model === 'gemini-3.5-flash-lite') return
       return sse(res, [`Answered by ${model}.`], 10)
+    }
+    if (last.startsWith('mock:drop')) {
+      const model = /models\/([^:]+):/.exec(req.url ?? '')?.[1] ?? ''
+      if (last.startsWith('mock:dropall') || model === 'gemini-3.5-flash-lite') return dropMidStream(res, ['Cut ', 'short ', 'here'])
+      return sse(res, [`The whole answer, `, `from ${model}.`], 10)
     }
     if (last.startsWith('mock:xss')) return sse(res, [XSS], 10)
     if (last.startsWith('mock:history')) {
