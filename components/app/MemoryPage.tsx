@@ -544,6 +544,35 @@ function AddForm({
   )
 }
 
+/**
+ * A memory search can't find by meaning yet. The reason is a tap away (and
+ * a click on a desktop), never a hover-only tooltip, which a phone can't show.
+ */
+function WordsOnly() {
+  const [open, setOpen] = useState(false)
+  return (
+    <>
+      <span>
+        <button
+          type="button"
+          className={styles.pending}
+          onClick={() => setOpen((on) => !on)}
+          aria-expanded={open}
+          data-testid="memory-words-only"
+        >
+          Words only for now
+          <Icon name="info" />
+        </button>
+      </span>
+      {open && (
+        <span className={styles.pendingWhy} data-testid="memory-words-only-why">
+          Search by meaning will include it once Gemini is available. Words find it now.
+        </span>
+      )}
+    </>
+  )
+}
+
 function MemoryItem({
   memory,
   focused,
@@ -726,11 +755,7 @@ function MemoryItem({
                 </span>
                 <span>{dateOf(memory.updatedAt)}</span>
                 {memory.file && <span>{formatBytes(memory.file.size)}</span>}
-                {!memory.indexed && (
-                  <span className={styles.pending} title="Search by meaning will include it once Gemini is available. Words find it now.">
-                    Words only for now
-                  </span>
-                )}
+                {!memory.indexed && <WordsOnly />}
               </div>
             </>
           )}

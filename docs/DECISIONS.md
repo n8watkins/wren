@@ -14,6 +14,7 @@ Read this before changing product, design or workflow, and add every new decisio
   Fonts: Bricolage Grotesque (display), Inter (interface), Newsreader (long reading), JetBrains Mono (labels and numbers), self-hosted through `next/font`.
 - **No landing page**: the app is the first screen, with a "How Wren works" modal on the first visit that "?" reopens, and in-context tips.
 - **Tips are a short guided tour** (owner, 2026-11-09): a toolbar with Skip tour, Previous (←), a "2 of 4" counter and Next (→), which reads Done on the last step; X, Esc and Skip tour end the whole tour; the arrow keys move back and forward and Enter is Next; on phones the buttons are at least 44 px and the tip stays on screen. "Show me around" in the "?" dialog starts it again.
+  Phones get the same four tips (2026-11-10): the Memory and meter tips point at the Memory tab and the header's ring there.
 - **Phases** (owner, 2026-11-09; reordered from voice, research, memory): 1 foundation and chat (done), 2 memory, 3 research, 4 voice, then launch.
   Memory and research cores are built in parallel lanes; each is wired into chat one at a time, memory first.
   Voice was planned last and alone because it would move chat onto the agent's WebSocket; that move is now its own later step (2026-11-10, below), so voice was built in parallel with memory in chat.
@@ -30,7 +31,8 @@ Read this before changing product, design or workflow, and add every new decisio
   Revisit at the public launch, or when traffic grows (paid billing on the demo key removes the issue).
   What Wren does instead: a calm notice above the composer for everyone, until dismissed or until a key of their own is on, and again in the "?" dialog and the key dialog: "This is a free demo running on Google Gemini's free tier. Please don't share personal details (names, contact info, health, finances, anything private) with the demo. For real use, add your own Gemini key." (`components/app/DemoNotice.tsx`).
   "Use your own key" is its button, and the key dialog has a three-step how-to (Google AI Studio's API keys page, Create API key, paste) and says the key stays in the browser.
-  Memory carries the same reminder: on the Memory page, in its explainer, and on each "Saved to Memory" line.
+  Memory carries the same reminder: on the Memory page, in its explainer, and on each "Saved to Memory" line, behind an (i) button that shows it under the line (2026-11-10: a hover tooltip never appears on a touch screen).
+  On a phone the notice keeps its words but packs them (no icon, the close button in the corner), and it steps aside while the listening view shows its own reminder.
   The voice listening view carries it too, on the demo key, and can't be dismissed there, since speech is easy to overshare.
   Visitors from the EEA, Switzerland and the UK get the same notice with a firmer line naming where they are ("You're visiting from the United Kingdom. Google's terms reserve Gemini's free tier from apps used in the UK, the EU/EEA and Switzerland, so please use Wren with your own Gemini key there.").
   The country comes only from Cloudflare (`request.cf.country`, read in `lib/server/region.ts`), never from the browser or the CF-IPCountry header (a lint rule rejects it), and the country list lives in one place with its source (`lib/region.ts`: the 27 EU states with Åland and France's outermost regions, Iceland, Liechtenstein, Norway, Switzerland, the UK).
@@ -206,6 +208,9 @@ Read this before changing product, design or workflow, and add every new decisio
 - **No incremental cache**: every page depends on who is signed in and carries a fresh CSP nonce, so OpenNext needs no R2 cache.
 
 ## Engineering
+
+- **Phones are a first-class width** (2026-11-10): every control is at least 44 px to tap on a phone, information is never hover-only (a tap shows it), the welcome scrolls instead of being cut off, the composer stays above the on-screen keyboard (`interactive-widget=resizes-content` for Android, `components/app/useVisualViewport.ts` for iOS), and a guest's human check only runs on the chat page.
+  `tests/e2e/phone.spec.ts` checks the first screen, the tour and a signed-in chat at 320, 375, 390 and 414 px.
 
 - Release-kit from the first commit: Conventional Commits, a weekly release train gated on CI and the commit check, pre-push guard.
 - Every rule in `docs/LESSONS.md` has a lint rule or a test.

@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { useState } from 'react'
+import { useId, useState } from 'react'
 import { ApiError } from '@/lib/client/api'
 import { memoryApi, memoryHref } from '@/lib/client/memory-api'
 import { errorMessage } from '@/lib/errors'
@@ -56,6 +56,10 @@ function SavedLine({ save, memory }: { save: AutoSave; memory: ThreadMemory }) {
   const [undone, setUndone] = useState(save.undone)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // The free-demo reminder, behind an (i): a tap shows it under the line, so it
+  // works on touch screens, where a hover tooltip never appears.
+  const [why, setWhy] = useState(false)
+  const whyId = useId()
   const undo = async () => {
     if (!memory.chatId || busy) return
     setBusy(true)
@@ -63,6 +67,7 @@ function SavedLine({ save, memory }: { save: AutoSave; memory: ThreadMemory }) {
     try {
       await memoryApi.undoSave(memory.chatId, save.id, memory.userKey)
       setUndone(true)
+      setWhy(false)
     } catch (failure) {
       setError(messageOf(failure))
     } finally {
@@ -77,32 +82,47 @@ function SavedLine({ save, memory }: { save: AutoSave; memory: ThreadMemory }) {
       ? 'Updated in Memory'
       : 'Saved to Memory'
   return (
-    <div
-      className={undone ? 'saved off' : 'saved'}
-      data-testid="memory-saved"
-      data-undone={undone || undefined}
-      title={undone ? undefined : MEMORY_REMINDER}
-    >
-      <Icon name={undone ? 'redo' : 'check'} />
-      <span className="st">{status}</span>
-      {undone ? (
-        <span className="fact">{save.text}</span>
-      ) : (
-        <Link href={memoryHref(save.memoryId)} className="fact" title={save.text}>
-          {save.text}
-        </Link>
+    <>
+      <div className={undone ? 'saved off' : 'saved'} data-testid="memory-saved" data-undone={undone || undefined}>
+        <Icon name={undone ? 'redo' : 'check'} />
+        <span className="st">{status}</span>
+        {undone ? (
+          <span className="fact">{save.text}</span>
+        ) : (
+          <Link href={memoryHref(save.memoryId)} className="fact" title={save.text}>
+            {save.text}
+          </Link>
+        )}
+        {!undone && (
+          <button type="button" onClick={() => void undo()} disabled={busy} data-testid="memory-undo">
+            {busy ? 'Undoing…' : 'Undo'}
+          </button>
+        )}
+        {!undone && (
+          <button
+            type="button"
+            className="why"
+            onClick={() => setWhy((open) => !open)}
+            aria-expanded={why}
+            aria-controls={whyId}
+            aria-label="About saving on the free demo"
+            data-testid="memory-saved-why"
+          >
+            <Icon name="info" />
+          </button>
+        )}
+        {error && (
+          <span className="err" role="alert">
+            {error}
+          </span>
+        )}
+      </div>
+      {why && !undone && (
+        <p className="saved-why" id={whyId} data-testid="memory-saved-reminder">
+          {MEMORY_REMINDER}
+        </p>
       )}
-      {!undone && (
-        <button type="button" onClick={() => void undo()} disabled={busy} data-testid="memory-undo">
-          {busy ? 'Undoing…' : 'Undo'}
-        </button>
-      )}
-      {error && (
-        <span className="err" role="alert">
-          {error}
-        </span>
-      )}
-    </div>
+    </>
   )
 }
 

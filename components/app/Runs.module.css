@@ -493,7 +493,13 @@
     padding: 12px 12px 12px 14px;
   }
   .statusRow :global(.btn) {
-    height: 40px;
+    height: 44px;
+  }
+  /* A source's whole title line is its link. */
+  .sources a {
+    display: block;
+    padding: 9px 0;
+    margin: -9px 0;
   }
 }
 
