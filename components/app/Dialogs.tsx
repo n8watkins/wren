@@ -105,7 +105,7 @@ export function HowItWorksDialog({
         <button type="button" className="btn" onClick={onShowAround}>
           Show me around
         </button>
-        <button type="button" className="btn pri" onClick={onClose} data-testid="start-chatting" autoFocus>
+        <button type="button" className="btn pri" onClick={onClose} data-testid="start-chatting" data-autofocus>
           Start chatting
         </button>
       </div>
@@ -203,7 +203,7 @@ export function SignInDialog({
               <input
                 id="sign-in-email"
                 type="email"
-                autoFocus
+                data-autofocus
                 autoComplete="email"
                 required
                 maxLength={254}
@@ -297,7 +297,7 @@ export function KeyDialog({
             <input
               id="gemini-key"
               type="password"
-              autoFocus
+              data-autofocus
               autoComplete="off"
               spellCheck={false}
               value={value}
@@ -340,7 +340,7 @@ export function ExplainerDialog({ id, onClose }: { id: ExplainerId | null; onClo
     <Dialog open={id !== null} onClose={onClose} label="How this works" narrow testId="explainer">
       {id && <ExplainerBody id={id} />}
       <div className="mfoot">
-        <button type="button" className="btn pri" onClick={onClose} autoFocus>
+        <button type="button" className="btn pri" onClick={onClose} data-autofocus>
           Got it
         </button>
       </div>
@@ -370,7 +370,7 @@ export function ConfirmDeleteDialog({
       </div>
       <div className="mfoot">
         <span className="note" />
-        <button type="button" className="btn" onClick={onCancel} autoFocus>
+        <button type="button" className="btn" onClick={onCancel} data-autofocus>
           Keep it
         </button>
         <button type="button" className="btn pri" onClick={onConfirm} data-testid="confirm-delete-yes">
