@@ -71,7 +71,27 @@ Read this before changing product, design or workflow, and add every new decisio
   Vectorize has no local mode, so local and test runs set `MEMORY_VECTORS=local` and keep vectors in the agent's SQLite; `/api/health` fails if production ever has it.
   Caps: 500 memories and 25 MB of files per person (5 MB a file; text, Markdown and PDF, a PDF read by Gemini rather than a PDF library), enforced in the agent and shown on the Memory page (`lib/memory.ts`).
   Memory's Gemini calls (embeddings, reading a PDF, picking facts) use the person's own key when they have one, otherwise 200 calls a day on the demo key; saving never waits on Gemini: a memory that can't be embedded yet is found by its words and embedded on a later save.
-  The extractor reads only the person's own recent messages, saves at most 3 lasting facts, and updates a near-duplicate (cosine 0.9 or more) instead of adding one; chat wiring calls it in the next step.
+  The extractor reads only the person's own recent messages, saves at most 3 lasting facts, and is shown the closest memories already saved to decide whether a fact is new or replaces one (no similarity score decides that).
+- **Memory in chat** (2026-11-10, phase 2; `agent/chat-memory.ts`).
+  Before each answer to a signed-in person, Wren gives the model two things from their Memory: its own facts about them (the newest 40), always, like a profile; and the notes, links, files and older facts a search by meaning finds for the message (at most 4), with one embedding call.
+  Facts go with every message because no similarity score can tell which questions a lasting fact matters to: real gemini-embedding-2 scored "Is vegetarian." 0.63 for "Can you suggest a dinner I could make tonight?" and 0.61 for "Why is the sky blue?", and with recall by search alone Wren suggested chicken to a vegetarian.
+  "From your Memory" chips show the items the search found (under the answer, as soon as they are known), plus the facts the finished answer took into account, which Gemini judges in one small call after the answer (an answer usually follows a preference without naming it); if that call can't run, only facts the answer names count.
+  In a check with real gemini-3.5-flash-lite on seven cases (three meatless dinners for a vegetarian, a Go answer for a Go engineer, a winter-walk answer for a dog owner, and two unrelated questions), it judged every one right each time it answered: 39 of 39, with 3 of 42 calls getting a 503.
+  After a finished answer (not a stopped, failed or regenerated one), the extractor reads the person's own messages and every fact it saves or updates shows "Saved to Memory" (or "Updated in Memory") with Undo under the message it came from; Undo deletes an added fact or puts back the replaced text, unless the person has edited it since.
+  "Save to Memory" on any message saves it as a note (a Wren answer as plain text), once: a second click, a double send or a note with the same words returns the memory already there.
+  What happened is kept per message (`message_memory`), so a reload shows the same chips, lines and saved buttons; a chip whose memory was deleted disappears, and a save deleted on the Memory page reads as removed.
+  The answer streams first: recall happens before it, and attribution and saving run after `done`, with the chat already free for the next message, sending their results on the same stream before it closes.
+  Every memory call in chat carries the person's own key (if any) and client IP, so it counts against both the person's and the network's daily memory allowance; a person's first messages skip the "already saved" lookup, as there is nothing to look up.
+  Guests get none of it: no calls, no buttons, no chips.
+- **Meaning thresholds, tuned on real gemini-embedding-2 searches** (2026-11-10, `agent/memory.ts`).
+  Scores sit in a narrow band (unrelated texts often 0.55 to 0.65; a bare "hi" scores 0.64 against everything), so a match must either score high or stand out from the person's other memories: a lead over the median score of the closest ones, when there are at least three.
+  Measured on 20 labelled memories and 40 chat messages (23 with relevant memories, 17 without), plus 20 keyword searches and 12 corrections of saved facts, over libraries of 2, 3, 5, 10 and 20 memories:
+  - Recall from a chat message: 0.64, or 0.58 with a lead of 0.08 over the median of the closest 10, with messages of fewer than two words skipped; queried as "task: question answering" (precision 0.91 against 0.74 for "task: search result").
+    Precision 0.91, recall 0.53, and an off-topic message got a chip 0.7% of the time.
+    The old single cutoff of 0.6 had precision 0.22 and chipped 27% of off-topic messages.
+  - The Memory page's search: 0.68, or 0.60 with a lead of 0.05 over the median of the closest 20.
+    Precision 0.89, recall 0.72, and an off-topic search showed something 0.7% of the time; the old 0.6 showed something for 66% of them, at precision 0.09.
+  - The extractor's look at what is already saved: 0.62 (corrections scored 0.71 to 0.80 against what they correct, so it keeps every one, and shows fewer unrelated memories to choose from).
 - **Research runs** (2026-11-09, phase 3 engine and the Runs page; starting a run from chat comes next).
   A run lives in the person's own agent (`agent/research.ts`, tables in `agent/research-store.ts`): plan 3 to 5 searches with the chat model, search each one, read up to 8 pages (at most 2 per site, 12 tries), then write a Markdown report where every `[n]` is a page the run read.
   It is a small state machine saved in SQLite, and each step is its own scheduled callback (the Agents SDK's `schedule`) doing one bounded piece of work: one model call, one search or one page.

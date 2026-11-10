@@ -320,6 +320,12 @@
   border-radius: 14px;
   background: var(--surface);
 }
+/* The memory a chat linked to (/memory#m-<id>). */
+.focused .card {
+  border-color: var(--sage);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--sage) 18%, transparent);
+  scroll-margin: 96px;
+}
 .ki {
   width: 32px;
   height: 32px;

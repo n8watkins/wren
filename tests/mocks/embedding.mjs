@@ -1,7 +1,7 @@
 // A stand-in for gemini-embedding-2 (tests/mocks/gemini.mjs and the unit
 // tests): words hashed into 768 dimensions, so texts that share words point
 // the same way and unrelated texts don't. The retrieval prefixes Wren adds
-// ("task: search result | query: ", "title: … | text: ") are left out, and
+// ("task: … | query: ", "title: … | text: ") are left out, and
 // each word counts by its first four letters, so "pumps" matches "pump".
 const DIMENSIONS = 768
 const STOP = new Set(['the', 'a', 'an', 'and', 'or', 'of', 'to', 'in', 'on', 'for', 'is', 'it', 'my', 'i', 'we', 'with', 'none', 'at', 'be'])
@@ -14,7 +14,7 @@ function hash(word) {
 
 export function mockEmbedding(text, dimensions = DIMENSIONS) {
   const body = String(text)
-    .replace(/^task: search result \| query: /, '')
+    .replace(/^task: [^|]*\| query: /, '')
     .replace(/^title: (.*?) \| text: /s, '$1 ')
   const values = new Array(dimensions).fill(0)
   for (const word of body.toLowerCase().match(/[a-z0-9]+/g) ?? []) {

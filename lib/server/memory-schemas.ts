@@ -71,3 +71,10 @@ export function idFrom(params: { id: string }): string {
   if (!parsed.success) throw new HttpError('memory_not_found')
   return parsed.data
 }
+
+/** An id in a chat route's path (a chat, a message or one of Wren's saves): a UUID, or the given not-found error. */
+export function pathId(value: string, notFound: 'chat_not_found' | 'message_not_found' | 'memory_not_found'): string {
+  const parsed = z.uuid().safeParse(value)
+  if (!parsed.success) throw new HttpError(notFound)
+  return parsed.data
+}

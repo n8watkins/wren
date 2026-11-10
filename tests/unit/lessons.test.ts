@@ -33,6 +33,8 @@ const ROUTES: Record<string, 'public' | 'session' | 'guest'> = {
   '/api/chat/stop': 'session',
   '/api/chats': 'session',
   '/api/chats/[id]': 'session',
+  '/api/chats/[id]/messages/[messageId]/save': 'session',
+  '/api/chats/[id]/saves/[saveId]/undo': 'session',
   '/api/usage': 'session',
   '/api/memory': 'session',
   '/api/memory/files': 'session',

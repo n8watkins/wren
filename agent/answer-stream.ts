@@ -20,7 +20,20 @@ export interface AnswerStreamOptions {
   save?: (text: string, status: 'done' | 'stopped' | 'error' | 'partial') => void
   /** Called when the answer failed before any text: give back what the meter took. */
   refund: () => Promise<void>
+  /** Called once the answer is over (done, stopped or failed), before `after` runs. */
   finish: () => void
+  /**
+   * Runs after `start` is sent and before the model is called: more system
+   * prompt (recalled memories) and events to send first. A failure here is
+   * logged and the answer goes on without it.
+   */
+  prepare?: () => Promise<{ system?: string; events?: ChatStreamEvent[] }>
+  /**
+   * Runs after a finished answer (not a stopped or failed one) and after
+   * `finish`, so the chat is free again: its events (Wren's saves) are sent
+   * before the stream closes. A failure here is logged and ignored.
+   */
+  after?: () => Promise<ChatStreamEvent[]>
 }
 
 const SAVE_EVERY_MS = 1_000
@@ -44,15 +57,26 @@ export function answerStream(options: AnswerStreamOptions): ReadableStream<Uint8
         }
       }
       send(options.start)
+      let systemPrompt = WREN_SYSTEM_PROMPT
+      if (options.prepare) {
+        try {
+          const prepared = await options.prepare()
+          if (prepared.system) systemPrompt = `${WREN_SYSTEM_PROMPT}\n\n${prepared.system}`
+          for (const event of prepared.events ?? []) send(event)
+        } catch {
+          log.warn('chat.prepare_failed', { code: 'internal' })
+        }
+      }
       let text = ''
       let savedAt = Date.now()
+      let finished: 'done' | 'stopped' | 'error' = 'error'
       try {
         for await (const chunk of streamReply({
           apiKey: options.apiKey,
           keySource,
           model,
           fallbackModel: options.fallbackModel,
-          systemPrompt: WREN_SYSTEM_PROMPT,
+          systemPrompt,
           history: options.history,
           signal: controller.signal,
           baseUrl: options.baseUrl,
@@ -65,6 +89,7 @@ export function answerStream(options: AnswerStreamOptions): ReadableStream<Uint8
           }
         }
         const status = controller.signal.aborted ? 'stopped' : 'done'
+        finished = status
         options.save?.(text, status)
         send({ t: 'done', status })
         log.info('chat.answer', { status: 200, chars: text.length, ms: Date.now() - started, model, keySource })
@@ -81,11 +106,18 @@ export function answerStream(options: AnswerStreamOptions): ReadableStream<Uint8
         })
       } finally {
         options.finish()
+      }
+      if (finished === 'done' && text && options.after) {
         try {
-          out.close()
+          for (const event of await options.after()) send(event)
         } catch {
-          // Already cancelled.
+          log.warn('chat.after_failed', { code: 'internal' })
         }
+      }
+      try {
+        out.close()
+      } catch {
+        // Already cancelled.
       }
     },
     cancel: () => controller.abort(),

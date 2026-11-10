@@ -115,6 +115,23 @@ function Library({
   const [notice, setNotice] = useState<string | null>(null)
   const [searching, setSearching] = useState(false)
 
+  // A memory a chat linked to (/memory#m-<id>): scrolled to and marked once the list is in.
+  // Read once the list is in, not on mount: a client-side navigation commits
+  // the address (and its #m-<id>) after this page first renders.
+  const [focusId, setFocusId] = useState<string | null>(null)
+  const loaded = memories !== null
+  useEffect(() => {
+    if (!loaded) return
+    const read = () => {
+      const id = /^#m-([0-9a-f-]{36})$/.exec(window.location.hash)?.[1] ?? null
+      setFocusId(id)
+      if (id) document.getElementById(`m-${id}`)?.scrollIntoView({ block: 'center' })
+    }
+    read()
+    window.addEventListener('hashchange', read)
+    return () => window.removeEventListener('hashchange', read)
+  }, [loaded])
+
   const [attempt, setAttempt] = useState(0)
   useEffect(() => {
     let cancelled = false
@@ -300,8 +317,8 @@ function Library({
             </span>
             <h2>Nothing saved yet</h2>
             <p>
-              Add a note, a link or a text, Markdown or PDF file, and find it later by what it means, not just its words. Soon
-              Wren will also keep lasting facts from your chats here, and check them before it answers.
+              Add a note, a link or a text, Markdown or PDF file, and find it later by what it means, not just its words. Wren
+              also keeps lasting facts you tell it in chat here, and checks your memory before it answers.
             </p>
             <button type="button" className="linkbtn" onClick={() => onExplain('memory')}>
               How Memory works
@@ -322,6 +339,7 @@ function Library({
               <MemoryItem
                 key={memory.id}
                 memory={memory}
+                focused={memory.id === focusId}
                 firstRelated={related && !shown[i - 1]?.related}
                 userKey={userKey}
                 onChanged={changed}
@@ -522,6 +540,7 @@ function AddForm({
 
 function MemoryItem({
   memory,
+  focused,
   firstRelated,
   userKey,
   onChanged,
@@ -529,6 +548,8 @@ function MemoryItem({
   onError,
 }: {
   memory: Memory
+  /** The memory a chat linked to: marked until the person moves on. */
+  focused: boolean
   firstRelated: boolean
   userKey: string | null
   onChanged: (memory: Memory) => void
@@ -598,7 +619,13 @@ function MemoryItem({
     ) : null
 
   return (
-    <li className={styles.item} data-testid="memory-item" data-kind={memory.kind}>
+    <li
+      id={`m-${memory.id}`}
+      className={focused ? `${styles.item} ${styles.focused}` : styles.item}
+      data-testid="memory-item"
+      data-kind={memory.kind}
+      data-focused={focused || undefined}
+    >
       {firstRelated && <span className={styles.relhead}>Related by meaning</span>}
       <div className={styles.card}>
         <span className={`${styles.ki} c-sg`} title={kind.one}>

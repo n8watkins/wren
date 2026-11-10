@@ -1,5 +1,6 @@
 import type { Sql } from './sql'
 import { SIZE_LIMITS } from '../lib/limits'
+import type { MessageMemory } from '../lib/memory'
 
 /**
  * One person's chats, in their own agent's SQLite database. Nothing here takes
@@ -22,6 +23,8 @@ export interface ChatMessage {
   content: string
   status: MessageStatus
   createdAt: number
+  /** Memory's marks on it (recalled, saved), added when a chat is loaded. */
+  memory?: MessageMemory
 }
 
 type ChatRow = { id: string; title: string; updated_at: number }
