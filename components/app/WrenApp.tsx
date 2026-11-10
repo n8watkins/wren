@@ -14,6 +14,7 @@ import { Icon } from '../Icons'
 import { WrenMark } from '../WrenMark'
 import { BottomNav, MobileHeader, Sidebar, type Person, type Place, type Theme } from './Chrome'
 import { Composer } from './Composer'
+import { MemoryPage, type MemoryAdding } from './MemoryPage'
 import { ConfirmDeleteDialog, ExplainerDialog, HowItWorksDialog, KeyDialog, SignInDialog } from './Dialogs'
 import { Runs } from './Runs'
 import { Thread, type StreamingAnswer } from './Thread'
@@ -130,11 +131,19 @@ export function WrenApp({ person, github, initialChats, initialUsage, guestSiteK
   const saveGuestChat = (next: GuestChat | null) => writeSession(GUEST_CHAT_KEY, next ? JSON.stringify(next) : null)
   const [draft, setDraft] = useState('')
   const [focusKey, setFocusKey] = useState(0)
+  // The Memory page's open add form; the sidebar's Memory "+" opens the note form from anywhere.
+  const [memoryAdding, setMemoryAdding] = useState<MemoryAdding>(null)
   const [modal, setModal] = useState<Modal>(null)
   const [menu, setMenu] = useState<{ open: boolean; at: string }>({ open: false, at: pathname })
   // The title menu closes whenever the address changes or a dialog opens.
   if (menu.open && (menu.at !== pathname || modal !== null)) setMenu({ open: false, at: pathname })
   const menuOpen = menu.open && menu.at === pathname
+  // Leaving the Memory page closes its add form.
+  const [lastPlace, setLastPlace] = useState(place)
+  if (lastPlace !== place) {
+    setLastPlace(place)
+    if (place !== 'memory') setMemoryAdding(null)
+  }
   const setMenuOpen = (open: boolean) => setMenu({ open, at: pathname })
 
   const userKey = useLocalSetting(KEYS.geminiKey)
@@ -443,7 +452,10 @@ export function WrenApp({ person, github, initialChats, initialUsage, guestSiteK
     onSignIn: () => setModal({ kind: 'sign-in', reason: null }),
     onSignOut: signOut,
     onKey: () => setModal({ kind: 'key' }),
-    onMemoryAdd: () => explain('memory'),
+    onMemoryAdd: () => {
+      setMemoryAdding('note')
+      if (place !== 'memory') router.push('/memory')
+    },
   }
 
   return (
@@ -480,20 +492,14 @@ export function WrenApp({ person, github, initialChats, initialUsage, guestSiteK
           />
         )}
         {place === 'memory' && (
-          <section className="soonpage" data-testid="memory-page">
-            <span className="hi c-sg">
-              <Icon name="mem" />
-            </span>
-            <span className="tag">Coming in the next update</span>
-            <h2>Memory</h2>
-            <p>
-              A library of notes, files and links you save. Wren will check it first and link back to whatever it used in an
-              answer. You&rsquo;ll be able to search it, browse it and delete anything at any time.
-            </p>
-            <button type="button" className="btn" onClick={() => explain('memory')}>
-              How Memory will work
-            </button>
-          </section>
+          <MemoryPage
+            signedIn={person !== null}
+            userKey={userKey}
+            adding={memoryAdding}
+            setAdding={setMemoryAdding}
+            onSignIn={() => setModal({ kind: 'sign-in', reason: 'Sign in to keep notes, links and files in your memory.' })}
+            onExplain={explain}
+          />
         )}
         {place === 'chat' &&
           (showWelcome ? (

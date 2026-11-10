@@ -15,10 +15,14 @@ import {
   type ChatSummary,
 } from './chats'
 import { answerStream } from './answer-stream'
+import { MemoryEngine, type MemoryList, type MemoryResult, type SavedFact } from './memory'
+import { memoryAi } from './memory-ai'
+import { sqliteStore, vectorizeStore } from './memory-vectors'
 import { chooseKey } from './keys'
 import { createMeterTable, giveBack, tryTake, used } from './meter'
 import type { ErrorCode } from '../lib/errors'
 import { DAILY_IP_LIMITS, DAILY_LIMITS, GUEST_LIMITS, nextUtcMidnight, utcDay, type UsageSnapshot } from '../lib/limits'
+import type { Memory, MemoryKind } from '../lib/memory'
 import { optionalSetting } from '../lib/secrets'
 import { ResearchRuns } from './research'
 
@@ -283,5 +287,69 @@ export class WrenAgent extends Agent<Cloudflare.Env> {
       research: { used: 0, limit: 0 },
       resetsAt: nextUtcMidnight(),
     }
+  }
+
+  // ---- Memory (agent/memory.ts): the person's library. Chat doesn't call it yet. ----
+
+  /** This person's memory engine, with the request's Gemini key (never stored). */
+  private memory(userKey?: string): MemoryEngine {
+    const sql = this.db
+    // The agent's id names the person's Vectorize namespace and R2 prefix.
+    const namespace = this.ctx.id.toString()
+    return new MemoryEngine({
+      sql,
+      vectors:
+        optionalSetting(this.env, 'MEMORY_VECTORS') === 'local' ? sqliteStore(sql) : vectorizeStore(this.env.MEMORY_INDEX, namespace),
+      files: this.env.MEMORY_FILES,
+      filePrefix: namespace,
+      ai: memoryAi({
+        sql,
+        userKey,
+        demoKey: optionalSetting(this.env, 'GEMINI_API_KEY'),
+        embeddingModel: this.env.GEMINI_EMBEDDING_MODEL,
+        model: this.env.GEMINI_MODEL,
+        fallbackModel: this.env.GEMINI_FALLBACK_MODEL || undefined,
+        baseUrl: optionalSetting(this.env, 'GEMINI_BASE_URL'),
+      }),
+    })
+  }
+
+  memoryList(request: { query?: string; kind?: MemoryKind; userKey?: string }): Promise<MemoryList> {
+    return this.memory(request.userKey).list(request)
+  }
+
+  memoryAddNote(text: string, userKey?: string): Promise<MemoryResult<{ memory: Memory }>> {
+    return this.memory(userKey).addNote(text)
+  }
+
+  memoryAddLink(link: { url: string; title: string }, userKey?: string): Promise<MemoryResult<{ memory: Memory }>> {
+    return this.memory(userKey).addLink(link.url, link.title)
+  }
+
+  memoryAddFile(name: string, bytes: ArrayBuffer, userKey?: string): Promise<MemoryResult<{ memory: Memory }>> {
+    return this.memory(userKey).addFile(name, bytes)
+  }
+
+  memoryUpdate(id: string, patch: { title?: string; text?: string; url?: string }, userKey?: string): Promise<MemoryResult<{ memory: Memory }>> {
+    return this.memory(userKey).update(id, patch)
+  }
+
+  memoryDelete(id: string): Promise<boolean> {
+    return this.memory().remove(id)
+  }
+
+  memoryFile(id: string): Promise<{ memory: Memory; bytes: ArrayBuffer } | null> {
+    return this.memory().file(id)
+  }
+
+  /**
+   * Saves lasting facts from a chat, read from the person's own messages in it
+   * (never Wren's answers). For the chat wiring that comes next.
+   */
+  rememberFromChat(chatId: string, userKey?: string): Promise<SavedFact[]> {
+    const own = listMessages(this.db, chatId)
+      .filter((message) => message.role === 'user')
+      .map((message) => ({ id: message.id, text: message.content }))
+    return this.memory(userKey).rememberFacts(own, { chatId })
   }
 }

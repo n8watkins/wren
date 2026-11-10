@@ -138,24 +138,120 @@ async function* streamModel(options: StreamReplyOptions, model: string): AsyncGe
   }
 }
 
-/* ---------- research (agent/research.ts) ---------- */
+/*
+ * Memory's calls (agent/memory.ts): embeddings, reading a PDF, and picking
+ * lasting facts from what the person wrote. Each is one short request; the
+ * agent takes a unit from the person's memory meter before it (demo key).
+ */
+
+export interface GeminiCallOptions {
+  apiKey: string
+  keySource: KeySource
+  /** Tests point this at a local mock of the Gemini API. */
+  baseUrl?: string
+}
+
+function client(options: GeminiCallOptions): GoogleGenAI {
+  return new GoogleGenAI({
+    apiKey: options.apiKey,
+    httpOptions: options.baseUrl ? { baseUrl: options.baseUrl } : undefined,
+  })
+}
+
+/** Runs `call` on `model`, then once on `fallbackModel` for failures another model might not have. */
+async function withFallback<T>(
+  options: GeminiCallOptions & { model: string; fallbackModel?: string },
+  event: string,
+  call: (model: string) => Promise<T>
+): Promise<T> {
+  const models = [options.model]
+  if (options.fallbackModel && options.fallbackModel !== options.model) models.push(options.fallbackModel)
+  let failure: GeminiError | undefined
+  for (const model of models) {
+    try {
+      return await call(model)
+    } catch (error) {
+      failure = error instanceof GeminiError ? error : classifyGeminiError(error, options.keySource)
+      if (!worthAnotherModel(failure)) throw failure
+      log.warn(event, { model, code: failure.code, upstreamStatus: failure.upstreamStatus, keySource: options.keySource })
+    }
+  }
+  throw failure ?? new GeminiError('upstream_error')
+}
+
+/** One text's embedding (gemini-embedding-2 takes its task in the text itself). */
+export async function embedText(
+  options: GeminiCallOptions & { model: string; text: string; dimensions: number; timeoutMs?: number }
+): Promise<number[]> {
+  try {
+    const response = await client(options).models.embedContent({
+      model: options.model,
+      contents: options.text,
+      config: { outputDimensionality: options.dimensions, abortSignal: AbortSignal.timeout(options.timeoutMs ?? 20_000) },
+    })
+    const values = response.embeddings?.[0]?.values
+    if (!values || values.length !== options.dimensions) throw new GeminiError('upstream_error')
+    return values
+  } catch (error) {
+    throw error instanceof GeminiError ? error : classifyGeminiError(error, options.keySource)
+  }
+}
+
+/**
+ * Asks the chat model for JSON matching `schema`, with a short timeout.
+ * Returns the parsed value; a reply that isn't JSON is an upstream error.
+ */
+export async function generateJson(
+  options: GeminiCallOptions & {
+    model: string
+    fallbackModel?: string
+    systemPrompt: string
+    parts: ({ text: string } | { inlineData: { mimeType: string; data: string } })[]
+    schema: unknown
+    timeoutMs?: number
+  }
+): Promise<unknown> {
+  return withFallback(options, 'memory.model_failed', async (model) => {
+    try {
+      const response = await client(options).models.generateContent({
+        model,
+        contents: [{ role: 'user', parts: options.parts }],
+        config: {
+          systemInstruction: options.systemPrompt,
+          responseMimeType: 'application/json',
+          responseJsonSchema: options.schema,
+          abortSignal: AbortSignal.timeout(options.timeoutMs ?? 20_000),
+          thinkingConfig: { thinkingLevel: ThinkingLevel.LOW },
+        },
+      })
+      return JSON.parse(response.text ?? '') as unknown
+    } catch (error) {
+      if (error instanceof SyntaxError) throw new GeminiError('upstream_error')
+      throw error instanceof GeminiError ? error : classifyGeminiError(error, options.keySource)
+    }
+  })
+}
+
+/*
+ * Research's calls (agent/research.ts): planning the searches, reading a PDF,
+ * writing the report, and the search backup. The agent takes one of the
+ * person's daily research runs before a run starts (demo key).
+ */
 
 /** A part of a one-shot request: text, or a PDF the model reads. */
 export type GeneratePart = { text: string } | { pdf: Uint8Array }
 
-export interface GenerateOptions {
-  apiKey: string
-  keySource: KeySource
+export interface GenerateOptions extends GeminiCallOptions {
   model: string
   fallbackModel?: string
   systemPrompt: string
   parts: GeneratePart[]
   /** Ask for JSON (the planner). */
   json?: boolean
+  /** Aborted when the run is cancelled. */
   signal: AbortSignal
   /** How long one model may take for the whole answer. */
   timeoutMs?: number
-  baseUrl?: string
 }
 
 const GENERATE_MS = 60_000
@@ -166,17 +262,10 @@ function toBase64(bytes: Uint8Array): string {
   return btoa(binary)
 }
 
-interface GenerateResult {
-  text: string
-  web: { url: string; title: string }[]
-}
-
-/** One whole (not streamed) answer, with the same model fallback as streamReply. Throws GeminiError. */
-async function generate(options: GenerateOptions, googleSearch: boolean): Promise<GenerateResult> {
-  const models = [options.model]
-  if (options.fallbackModel && options.fallbackModel !== options.model) models.push(options.fallbackModel)
-  let failure: GeminiError | undefined
-  for (const model of models) {
+/** One whole (not streamed) answer, with the model fallback. Throws GeminiError. */
+async function generate(options: GenerateOptions, googleSearch: boolean): Promise<{ text: string; web: { url: string; title: string }[] }> {
+  return withFallback(options, 'research.model_failed', async (model) => {
+    if (options.signal.aborted) throw new GeminiError('upstream_error')
     const attempt = new AbortController()
     const stop = () => attempt.abort()
     options.signal.addEventListener('abort', stop)
@@ -186,11 +275,7 @@ async function generate(options: GenerateOptions, googleSearch: boolean): Promis
       attempt.abort()
     }, options.timeoutMs ?? GENERATE_MS)
     try {
-      const ai = new GoogleGenAI({
-        apiKey: options.apiKey,
-        httpOptions: options.baseUrl ? { baseUrl: options.baseUrl } : undefined,
-      })
-      const response = await ai.models.generateContent({
+      const response = await client(options).models.generateContent({
         model,
         contents: [
           {
@@ -213,16 +298,14 @@ async function generate(options: GenerateOptions, googleSearch: boolean): Promis
       )
       return { text: response.text ?? '', web }
     } catch (error) {
+      // A cancelled run: the other model's attempt ends at its first line, without a request.
       if (options.signal.aborted) throw new GeminiError('upstream_error')
-      failure = timedOut ? new GeminiError('upstream_error', 504) : classifyGeminiError(error, options.keySource)
-      if (!worthAnotherModel(failure)) throw failure
-      log.warn('research.model_failed', { model, code: failure.code, upstreamStatus: failure.upstreamStatus })
+      throw timedOut ? new GeminiError('upstream_error', 504) : classifyGeminiError(error, options.keySource)
     } finally {
       clearTimeout(timer)
       options.signal.removeEventListener('abort', stop)
     }
-  }
-  throw failure ?? new GeminiError('upstream_error')
+  })
 }
 
 /** A whole answer as text: research planning, reading a PDF, writing the report. */
@@ -239,11 +322,7 @@ export async function searchWithGoogle(
   options: Omit<GenerateOptions, 'parts' | 'json' | 'systemPrompt'> & { query: string }
 ): Promise<{ url: string; title: string }[]> {
   const { web } = await generate(
-    {
-      ...options,
-      systemPrompt: 'Search the web for the query and answer in one short paragraph.',
-      parts: [{ text: options.query }],
-    },
+    { ...options, systemPrompt: 'Search the web for the query and answer in one short paragraph.', parts: [{ text: options.query }] },
     true
   )
   const seen = new Set<string>()

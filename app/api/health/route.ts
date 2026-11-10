@@ -22,6 +22,18 @@ async function timed<T>(work: () => Promise<T>): Promise<{ value?: T; error?: tr
   }
 }
 
+/** Memory needs its R2 bucket and its search index (or local vectors in test runs); meaning search needs a key. */
+function memoryCheck(env: CloudflareEnv, demoKey: boolean): Check {
+  const localVectors = optionalSetting(env, 'MEMORY_VECTORS') === 'local'
+  const bound = Boolean(env.MEMORY_FILES) && (localVectors || Boolean(env.MEMORY_INDEX))
+  if (!bound) return { ok: false, detail: 'the memory bucket or search index is not bound' }
+  const vectors = localVectors ? 'local vectors' : 'Vectorize'
+  return {
+    ok: true,
+    detail: demoKey ? `notes, links and files, searched by meaning (${env.GEMINI_EMBEDDING_MODEL}, ${vectors})` : `notes, links and files; search by meaning needs a Gemini key (${vectors})`,
+  }
+}
+
 export async function GET(): Promise<Response> {
   const env = getEnv()
   const production = isProduction(env) && new URL(env.PUBLIC_URL).protocol === 'https:'
@@ -32,6 +44,7 @@ export async function GET(): Promise<Response> {
     env.EMAIL_TRANSPORT === 'outbox' ||
     optionalSetting(env, 'GEMINI_BASE_URL') !== undefined ||
     optionalSetting(env, 'TURNSTILE_VERIFY_URL') !== undefined ||
+    optionalSetting(env, 'MEMORY_VECTORS') !== undefined ||
     optionalSetting(env, 'TAVILY_BASE_URL') !== undefined
   const guests = guestChatConfigured(env)
   const demoKey = optionalSetting(env, 'GEMINI_API_KEY') !== undefined
@@ -64,7 +77,7 @@ export async function GET(): Promise<Response> {
           ? 'searches with Tavily, Gemini Google Search as the backup'
           : 'no Tavily key yet: searches with Gemini Google Search',
     },
-    memory: { ok: null, detail: 'coming in a later update' },
+    memory: memoryCheck(env, demoKey),
   }
 
   const core = checks.database.ok && checks.agents.ok && checks.config.ok

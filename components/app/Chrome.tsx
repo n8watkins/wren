@@ -141,9 +141,8 @@ export function Sidebar(props: ChromeProps) {
           <Link className="nav" href="/memory" aria-current={place === 'memory' ? 'page' : undefined}>
             <Icon name="mem" />
             Memory
-            <span className="soon">Soon</span>
           </Link>
-          <button type="button" className="plus" aria-label="Add to Memory (next update)" onClick={props.onMemoryAdd} data-tip="mem">
+          <button type="button" className="plus" aria-label="Add a note to Memory" onClick={props.onMemoryAdd} data-tip="mem">
             <Icon name="plus" />
           </button>
         </div>

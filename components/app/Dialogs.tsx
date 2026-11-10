@@ -65,8 +65,8 @@ export function HowItWorksDialog({
               <span className="n">3. </span>
               Build your memory
             </b>
-            <p>Save notes, files and links. Wren will check them first and link back to whatever it used.</p>
-            <span className="later">Next update</span>
+            <p>Save notes, files and links on the Memory page and find them by meaning. Soon Wren will check them first and link back to whatever it used.</p>
+            <span className="later">In chat: next update</span>
           </div>
         </li>
         <li className="howi">

@@ -14,8 +14,13 @@
 //   the report writer  a report citing every source it was given; for
 //                      "mock:hostile" also a citation of a source that doesn't
 //                      exist and links to a page that wasn't read
+// Memory's calls: batchEmbedContents answers with tests/mocks/embedding.mjs,
+// and generateContent (JSON) reads a PDF (the text in its "(...) Tj" strings)
+// or picks facts: each sentence of the person's messages that says "I" or
+// "my" (at most 3); "mock:fail" anywhere fails.
 // It also stands in for Turnstile's siteverify (POST /siteverify).
 import { createServer } from 'node:http'
+import { mockEmbedding } from './embedding.mjs'
 
 const port = Number(process.env.MOCK_GEMINI_PORT ?? 3127)
 const host = process.env.E2E_HOST ?? '127.0.0.2'
@@ -65,17 +70,19 @@ const HOSTILE_EXTRA = [
   '[1]: https://evil.example/ref',
 ].join('\n')
 
+/** Sends a JSON answer; true, so a handler can say it answered. */
 function json(res, status, body) {
   res.writeHead(status, { 'Content-Type': 'application/json' })
   res.end(JSON.stringify(body))
+  return true
 }
 
 function answer(res, text, extra = {}) {
-  json(res, 200, { candidates: [{ content: { role: 'model', parts: [{ text }] }, finishReason: 'STOP', index: 0, ...extra }] })
+  return json(res, 200, { candidates: [{ content: { role: 'model', parts: [{ text }] }, finishReason: 'STOP', index: 0, ...extra }] })
 }
 
-/** Research's one-shot calls (agent/gemini.ts generateText and searchWithGoogle). */
-function generate(res, body) {
+/** Research's one-shot calls (agent/gemini.ts generateText and searchWithGoogle); false when the call isn't research's. */
+function researchCall(res, body) {
   const system = body.systemInstruction?.parts?.map((p) => p.text).join(' ') ?? ''
   const prompt = (body.contents ?? []).flatMap((t) => t.parts ?? []).map((p) => p.text ?? '').join('\n')
   if ((body.tools ?? []).some((tool) => tool.googleSearch)) {
@@ -103,7 +110,41 @@ function generate(res, body) {
     if (!id || markers.some((m) => !m.endsWith(`${id}>>>`))) return answer(res, 'DEFUSE FAILED')
     return answer(res, REPORT(n) + (prompt.includes('mock:hostile') ? HOSTILE_EXTRA : ''))
   }
-  return answer(res, 'Plain text.')
+  return false
+}
+
+function pdfText(base64) {
+  const raw = Buffer.from(base64, 'base64').toString('latin1')
+  return [...raw.matchAll(/\(([^)]*)\)\s*Tj/g)].map((m) => m[1]).join('\n')
+}
+
+function pickFacts(text) {
+  const own = text.replace(/^Message \d+:$/gm, '')
+  return own
+    .split(/(?<=[.!?])\s+|\n+/)
+    .map((s) => s.trim())
+    .filter((s) => /\b(i|i'm|my)\b/i.test(s))
+    .slice(0, 3)
+}
+
+/** Memory's non-streaming calls: embeddings, and JSON answers for reading PDFs and picking facts. */
+function memoryCall(req, res, body) {
+  if (/:batchEmbedContents/.test(req.url ?? '')) {
+    const embeddings = (body.requests ?? []).map((r) => {
+      const text = (r.content?.parts ?? []).map((p) => p.text ?? '').join(' ')
+      return { values: mockEmbedding(text, r.outputDimensionality ?? 768) }
+    })
+    if (embeddings.some((_, i) => /mock:fail/.test(JSON.stringify(body.requests[i])))) {
+      return json(res, 500, { error: { code: 500, message: 'internal', status: 'INTERNAL' } })
+    }
+    return json(res, 200, { embeddings })
+  }
+  const parts = (body.contents ?? []).flatMap((c) => c.parts ?? [])
+  const text = parts.map((p) => p.text ?? '').join('\n')
+  if (/mock:fail/.test(text)) return json(res, 500, { error: { code: 500, message: 'internal', status: 'INTERNAL' } })
+  const pdf = parts.find((p) => p.inlineData?.mimeType === 'application/pdf')
+  const answer = pdf ? { text: pdfText(pdf.inlineData.data) } : { facts: pickFacts(text) }
+  return json(res, 200, { candidates: [{ content: { role: 'model', parts: [{ text: JSON.stringify(answer) }] }, index: 0 }] })
 }
 
 function sse(res, chunks, delay) {
@@ -133,8 +174,7 @@ createServer((req, res) => {
       res.end(JSON.stringify({ success, 'error-codes': success ? [] : ['invalid-input-response'] }))
       return
     }
-    const oneShot = /:generateContent/.test(req.url ?? '')
-    if (!oneShot && !/:streamGenerateContent/.test(req.url ?? '')) {
+    if (!/:(streamGenerateContent|generateContent|batchEmbedContents)/.test(req.url ?? '')) {
       res.writeHead(404).end()
       return
     }
@@ -148,7 +188,7 @@ createServer((req, res) => {
     try {
       body = JSON.parse(raw)
     } catch {}
-    if (oneShot) return generate(res, body)
+    if (!/:streamGenerateContent/.test(req.url ?? '')) return researchCall(res, body) || memoryCall(req, res, body)
     const turns = body.contents ?? []
     const last = turns.filter((t) => t.role === 'user').at(-1)?.parts?.[0]?.text ?? ''
     if (last.startsWith('mock:fail')) {

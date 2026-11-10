@@ -4,13 +4,15 @@ An AI assistant you can type or talk to, that researches the web for you and rem
 A portfolio project by Nathan Watkins, live at https://wren.n8builds.dev.
 
 Phase 1 is live in this repo: the app shell, sign-in with GitHub or an email link, streaming chat with Gemini, a daily usage meter, and your own Gemini key.
+The Memory library is in: save notes, links and files and find them by meaning.
 Research runs work from the Runs page: Wren plans searches, reads the pages and writes a report that cites only what it read.
-Voice, Memory and research from chat come next.
+Memory and research in chat, and Voice, come next.
 
 ## Stack
 
 - Next.js 16 (App Router, Turbopack) on Cloudflare Workers through OpenNext.
-- One Durable Object agent per person (Cloudflare Agents SDK) holding their chats and usage meter.
+- One Durable Object agent per person (Cloudflare Agents SDK) holding their chats, memory and usage meter.
+- Vectorize (search by meaning, a namespace per person) and R2 (saved files) for Memory.
 - Better Auth on D1 for accounts and sessions.
 - Gemini through `@google/genai`; research searches with Tavily, with Gemini's Google Search as the backup.
 

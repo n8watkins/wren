@@ -65,6 +65,13 @@ Read this before changing product, design or workflow, and add every new decisio
   Burst limits per user and per IP use Workers rate limiting.
 - **Bring your own key**: kept only in the browser and sent per request in a header; never stored or logged.
   A personal key that Gemini rejects is an error the person sees; Wren never switches to the demo key.
+- **Memory lives in each person's own agent, not D1** (2026-11-09, from the approved memory and research plan).
+  The `memories` table sits in the person's Durable Object SQLite beside their chats (`agent/memory-store.ts`), so one person's request can never read another's memory, the same way chats work.
+  Search by meaning uses `gemini-embedding-2` at 768 dimensions (Vectorize takes at most 1536; 768 is one of Google's recommended sizes) in the `wren-memory` Vectorize index, with the agent's id as the namespace on every write and query; files go to the `wren-memory` R2 bucket under the same id (`agent/memory.ts`).
+  Vectorize has no local mode, so local and test runs set `MEMORY_VECTORS=local` and keep vectors in the agent's SQLite; `/api/health` fails if production ever has it.
+  Caps: 500 memories and 25 MB of files per person (5 MB a file; text, Markdown and PDF, a PDF read by Gemini rather than a PDF library), enforced in the agent and shown on the Memory page (`lib/memory.ts`).
+  Memory's Gemini calls (embeddings, reading a PDF, picking facts) use the person's own key when they have one, otherwise 200 calls a day on the demo key; saving never waits on Gemini: a memory that can't be embedded yet is found by its words and embedded on a later save.
+  The extractor reads only the person's own recent messages, saves at most 3 lasting facts, and updates a near-duplicate (cosine 0.9 or more) instead of adding one; chat wiring calls it in the next step.
 - **Research runs** (2026-11-09, phase 3 engine and the Runs page; starting a run from chat comes next).
   A run lives in the person's own agent (`agent/research.ts`, tables in `agent/research-store.ts`): plan 3 to 5 searches with the chat model, search each one, read up to 8 pages (at most 2 per site, 12 tries), then write a Markdown report where every `[n]` is a page the run read.
   It is a small state machine saved in SQLite, and each step is its own scheduled callback (the Agents SDK's `schedule`) doing one bounded piece of work: one model call, one search or one page.

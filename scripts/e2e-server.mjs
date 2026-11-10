@@ -30,6 +30,8 @@ config.d1_databases[0].migrations_dir = '../../migrations'
 for (const limiter of config.ratelimits) limiter.simple.limit = 10_000
 // The custom domain would make wrangler dev rewrite every request to it.
 delete config.routes
+// Vectorize has no local mode: memory keeps its vectors in the agent's SQLite.
+delete config.vectorize
 config.vars = {
   ...config.vars,
   APP_ENV: 'test',
@@ -37,6 +39,7 @@ config.vars = {
   EMAIL_TRANSPORT: 'outbox',
   GEMINI_BASE_URL: `http://${host}:${mockPort}`,
   GEMINI_API_KEY: 'test-demo-key',
+  MEMORY_VECTORS: 'local',
   // Research searches go to the Tavily mock (tests/mocks/tavily.mjs).
   TAVILY_API_KEY: 'test-tavily-key',
   TAVILY_BASE_URL: `http://${host}:${tavilyPort}`,
