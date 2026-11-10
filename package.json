@@ -14,6 +14,7 @@
     "db:migrate": "wrangler d1 migrations apply wren --remote",
     "db:migrate:local": "wrangler d1 migrations apply wren --local",
     "magic-link": "node scripts/magic-link.mjs",
+    "model-check:local": "node scripts/model-check-local.mjs",
     "lint": "eslint . --max-warnings 0",
     "type-check": "next typegen && tsc --noEmit",
     "knip": "knip",
