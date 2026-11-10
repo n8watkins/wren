@@ -4,7 +4,8 @@
 // JSON in binary frames, and closes with 1007 for a bad key (one starting
 // "bad-"). After about a second of mic audio it answers one turn: the
 // person's words "Hello Wren", a second of a 440 Hz tone as Wren's voice, and
-// "Hi, I'm the mock Wren." A typed message gets "You typed: <text>" back;
+// "Hi, I'm the mock Wren.", once per session, however long the mic stays
+// open (so a slow test run never hears a second turn). A typed message gets "You typed: <text>" back;
 // "mock:drop" closes the connection as if Gemini had gone away.
 import { WebSocketServer } from 'ws'
 
@@ -35,6 +36,7 @@ function session(ws, key) {
   const send = (message) => ws.send(Buffer.from(JSON.stringify(message)), { binary: true })
   let heard = 0
   let answering = false
+  let spoken = false
 
   const answer = async (said, reply) => {
     answering = true
@@ -69,7 +71,10 @@ function session(ws, key) {
       if (!answering) void answer(null, `You typed: ${input.text}`)
     } else if (input?.audio?.data) {
       heard += Buffer.from(input.audio.data, 'base64').length
-      if (heard >= AUDIO_BYTES_PER_TURN && !answering) void answer('Hello Wren', 'Hi, I’m the mock Wren.')
+      if (heard >= AUDIO_BYTES_PER_TURN && !answering && !spoken) {
+        spoken = true
+        void answer('Hello Wren', 'Hi, I’m the mock Wren.')
+      }
     }
   })
 }
