@@ -4,7 +4,7 @@ import { GeminiError, classifyLiveClose, type KeySource, type LiveEvents } from 
 import { TicketBook, VoiceRelay, voiceHistory, type TakeResult } from '../../agent/voice'
 import type { ChatMessage, ChatSummary } from '../../agent/chats'
 import { DAILY_LIMITS, VOICE_LIMITS, nextUtcMidnight, utcDay } from '../../lib/limits'
-import type { VoiceServerMessage } from '../../lib/voice'
+import { voiceMinutes, type VoiceServerMessage } from '../../lib/voice'
 import { signVoiceTicket, verifyVoiceTicket, voiceOriginAllowed, type VoiceTicket } from '../../lib/security/voice-ticket'
 import { memorySql } from '../support/sql'
 
@@ -404,5 +404,15 @@ describe('voice ticket', () => {
     expect(voiceOriginAllowed('http://localhost:3121', production)).toBe(false)
     expect(voiceOriginAllowed(null, production)).toBe(false)
     expect(voiceOriginAllowed('http://localhost:3121', { PUBLIC_URL: 'http://localhost:3120', APP_ENV: 'development' })).toBe(true)
+  })
+})
+
+describe('voice minutes on the meter', () => {
+  it('shows tenths of a minute, rounded up so any use shows', () => {
+    expect(voiceMinutes(0)).toBe(0)
+    expect(voiceMinutes(2)).toBe(0.1)
+    expect(voiceMinutes(6)).toBe(0.1)
+    expect(voiceMinutes(7)).toBe(0.2)
+    expect(voiceMinutes(600)).toBe(10)
   })
 })

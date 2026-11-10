@@ -9,8 +9,7 @@ import type { UsageSnapshot } from './limits'
  * else is one JSON object per text frame.
  */
 
-/** Sample rates of the audio each way (Gemini Live's own). */
-export const VOICE_INPUT_RATE = 16_000
+/** Wren's audio sample rate (Gemini Live's own); the mic's is 16 kHz (public/voice-capture.js). */
 export const VOICE_OUTPUT_RATE = 24_000
 
 /** From the browser. `start` comes first and only once; the key is the person's own, from this browser. */
@@ -54,7 +53,7 @@ export type VoiceServerMessage =
   | { t: 'end'; reason: VoiceEndReason }
   | { t: 'error'; code: ErrorCode }
 
-/** Seconds of voice used, as the minutes the meter shows (one decimal). */
+/** Seconds of voice used, as the minutes the meter shows: tenths, rounded up, so any use shows. */
 export function voiceMinutes(seconds: number): number {
-  return Math.round((seconds / 60) * 10) / 10
+  return Math.ceil(seconds / 6) / 10
 }

@@ -319,7 +319,7 @@ export class VoiceRelay {
  * which builds these headers itself and never passes the browser's along.
  */
 
-export const VOICE_AGENT_URL = 'https://wren-agent.internal/voice'
+const VOICE_AGENT_URL = 'https://wren-agent.internal/voice'
 
 const HANDOFF = { chat: 'x-wren-voice-chat', ip: 'x-wren-voice-ip', nonce: 'x-wren-voice-nonce', expires: 'x-wren-voice-expires' } as const
 

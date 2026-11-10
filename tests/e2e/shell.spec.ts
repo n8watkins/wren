@@ -42,17 +42,16 @@ test('the guest shell matches the layout for this width', async ({ page }) => {
   await noHorizontalScroll(page)
 })
 
-test('Voice says it is coming, without pretending; Research and Memory ask guests to sign in', async ({ page }) => {
+test('Voice, Research and Memory ask guests to sign in', async ({ page }) => {
   await skipIntro(page)
   await page.goto('/')
   const scope = page.locator(isPhone(page) ? '.mcomp' : '.composer')
-  await scope.locator('[data-tip="mic"]').click()
-  const explainer = page.getByTestId('explainer')
-  await expect(explainer).toContainText('Coming in the next update')
-  await expect(explainer).toContainText('How talking will work')
-  await explainer.getByRole('button', { name: 'Got it' }).click()
-  await expect(explainer).toBeHidden()
+  await scope.getByTestId('mic').click()
+  await expect(page.getByTestId('sign-in')).toContainText('Sign in to talk with Wren: 10 voice minutes a day')
+  await page.keyboard.press('Escape')
+  await expect(page.getByTestId('sign-in')).toBeHidden()
 
+  const explainer = page.getByTestId('explainer')
   await scope.locator('[data-tip="res"]').click()
   await expect(explainer).toContainText('How research works')
   await expect(explainer).toContainText('Start a run from Research runs')
