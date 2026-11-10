@@ -214,7 +214,62 @@ describe("health's freshness rules", () => {
     const failed = { ...passed, results: { ...passed.results, chat: { target: 'gemini-x', ok: false, ms: 20_000, code: 'upstream_error', status: 504 } } }
     const health = modelsHealth({ lastRun: failed, waitingSince: 0 }, now)
     expect(health.ok).toBe(false)
-    expect(health.detail).toContain('chat model (gemini-x): upstream_error 504')
+    expect(health.detail).toContain('chat model (gemini-x) upstream_error 504')
+  })
+
+  describe('backups', () => {
+    const all = (overrides: Partial<ModelCheckRun['results']>): ModelCheckRun => ({
+      ranAt: now - 3 * hour,
+      results: {
+        chat: { target: 'gemini-main', ok: true, ms: 800 },
+        chatFallback: { target: 'gemini-backup', ok: true, ms: 900 },
+        embedding: { target: 'emb', ok: true, ms: 400 },
+        live: { target: 'live', ok: true, ms: 400 },
+        googleSearch: { target: 'gemini-main', ok: true, ms: 300 },
+        tavily: { target: 'tavily', ok: true, ms: 500 },
+        ...overrides,
+      },
+    })
+    const down = (target: string, code: string, status?: number) => ({ target, ok: false, ms: 300, code, status, attempts: 2 })
+    const health = (run: ModelCheckRun) => modelsHealth({ lastRun: run, waitingSince: 0 }, now)
+
+    it('a failing backup is a warning that keeps the status ok while its primary works', () => {
+      const grounding = health(all({ googleSearch: down('gemini-main', 'demo_busy', 429) }))
+      expect(grounding).toEqual({
+        ok: true,
+        warning: true,
+        detail: '5 of 6 answered 3 h ago; backup not working: Google Search grounding (gemini-main) demo_busy 429 (research uses Tavily)',
+      })
+      const fallback = health(all({ chatFallback: down('gemini-backup', 'upstream_error', 503) }))
+      expect(fallback).toMatchObject({ ok: true, warning: true })
+      expect(fallback.detail).toContain('backup not working: fallback chat model (gemini-backup) upstream_error 503 (chat uses gemini-main)')
+    })
+
+    it('a primary failing still degrades, even when its backup works', () => {
+      for (const name of ['chat', 'embedding', 'live', 'tavily'] as const) {
+        const result = health(all({ [name]: down('x', 'upstream_error', 500) }))
+        expect(result.ok, name).toBe(false)
+        expect(result.warning, name).toBeUndefined()
+      }
+    })
+
+    it('research with neither Tavily nor grounding has no search: both are failures', () => {
+      const result = health(all({ tavily: down('tavily', 'tavily_error', 432), googleSearch: down('gemini-main', 'demo_busy', 429) }))
+      expect(result.ok).toBe(false)
+      expect(result.detail).toBe('failed 3 h ago: Google Search grounding (gemini-main) demo_busy 429; Tavily (tavily) tavily_error 432')
+    })
+
+    it('grounding is the only search when Tavily has no key, so its failure degrades', () => {
+      const result = health(all({ tavily: { target: 'tavily', ok: null, ms: 0, code: 'no_tavily_key' }, googleSearch: down('gemini-main', 'demo_busy', 429) }))
+      expect(result.ok).toBe(false)
+    })
+
+    it('chat with both models down is a failure of both', () => {
+      const result = health(all({ chat: down('gemini-main', 'upstream_error', 503), chatFallback: down('gemini-backup', 'upstream_error', 503) }))
+      expect(result.ok).toBe(false)
+      expect(result.detail).toContain('fallback chat model (gemini-backup) upstream_error 503')
+      expect(result.detail).not.toContain('backup not working')
+    })
   })
 
   it('is not ok when the last run is older than the window', () => {

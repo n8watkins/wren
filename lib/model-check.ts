@@ -59,16 +59,36 @@ function ago(ms: number): string {
 
 function failureText(name: ModelCheckName, result: ProbeResult): string {
   const code = result.code ?? 'error'
-  return `${LABELS[name]} (${result.target}): ${result.status ? `${code} ${result.status}` : code}`
+  return `${LABELS[name]} (${result.target}) ${result.status ? `${code} ${result.status}` : code}`
 }
 
 /**
- * Health's "models" check from the saved state. ok when the last run passed
- * and is fresh; not ok when it failed or is stale, or when no run has been
- * saved for a whole freshness window; null (not run yet) only in the first
- * window after a deploy, so a new deploy doesn't page.
+ * The backup-only paths and what covers for them while they're down: the
+ * fallback chat model (the primary answers chat) and Google Search grounding
+ * (Tavily searches for research). A backup's failure is a warning while its
+ * primary works, and a failure when the primary is down or unchecked too.
  */
-export function modelsHealth(state: ModelCheckState, now: number): { ok: boolean | null; detail: string } {
+const BACKUPS: Partial<Record<ModelCheckName, { primary: ModelCheckName; covered: (primary: ProbeResult) => string }>> = {
+  chatFallback: { primary: 'chat', covered: (primary) => `chat uses ${primary.target}` },
+  googleSearch: { primary: 'tavily', covered: () => 'research uses Tavily' },
+}
+
+export interface ModelsHealth {
+  ok: boolean | null
+  detail: string
+  /** A backup-only path isn't working while its primary is: shown, but the status stays "ok". */
+  warning?: true
+}
+
+/**
+ * Health's "models" check from the saved state. Not ok (status "degraded")
+ * when a primary dependency failed, when a backup failed with its primary
+ * down too, or when the last run is stale or no run has been saved for a
+ * whole freshness window; a warning, still ok, when only a backup failed;
+ * null (not run yet) only in the first window after a deploy, so a new
+ * deploy doesn't page.
+ */
+export function modelsHealth(state: ModelCheckState, now: number): ModelsHealth {
   const run = state.lastRun
   if (!run) {
     const waited = now - state.waitingSince
@@ -78,15 +98,25 @@ export function modelsHealth(state: ModelCheckState, now: number): { ok: boolean
   const age = now - run.ranAt
   if (age > MODEL_CHECK_FRESH_MS) return { ok: false, detail: `the last daily model check is stale (${ago(age)})` }
   const entries = MODEL_CHECKS.flatMap((name) => (run.results[name] ? [[name, run.results[name]] as const] : []))
-  const failed = entries.filter(([, result]) => result.ok === false)
-  if (failed.length) {
-    return { ok: false, detail: `failed ${ago(age)}: ${failed.map(([name, result]) => failureText(name, result)).join('; ')}` }
+  const failures: string[] = []
+  const backups: string[] = []
+  for (const [name, result] of entries) {
+    if (result.ok !== false) continue
+    const backup = BACKUPS[name]
+    const primary = backup && run.results[backup.primary]
+    if (backup && primary?.ok === true) backups.push(`${failureText(name, result)} (${backup.covered(primary)})`)
+    else failures.push(failureText(name, result))
   }
   const answered = entries.filter(([, result]) => result.ok === true).length
   const skipped = entries.filter(([, result]) => result.ok === null).map(([name]) => LABELS[name])
-  if (!answered) return { ok: null, detail: 'the daily model check had no keys to check with' }
-  return {
-    ok: true,
-    detail: `${answered} of ${entries.length} answered ${ago(age)}${skipped.length ? `; not checked (no key): ${skipped.join(', ')}` : ''}`,
-  }
+  if (!answered && !failures.length) return { ok: null, detail: 'the daily model check had no keys to check with' }
+  const detail = [
+    failures.length ? `failed ${ago(age)}: ${failures.join('; ')}` : `${answered} of ${entries.length} answered ${ago(age)}`,
+    backups.length ? `backup not working: ${backups.join('; ')}` : '',
+    skipped.length ? `not checked (no key): ${skipped.join(', ')}` : '',
+  ]
+    .filter(Boolean)
+    .join('; ')
+  if (failures.length) return { ok: false, detail }
+  return backups.length ? { ok: true, detail, warning: true } : { ok: true, detail }
 }

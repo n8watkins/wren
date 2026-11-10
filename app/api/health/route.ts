@@ -15,7 +15,8 @@ import { MODEL_CHECK_INSTANCE, modelsHealth } from '@/lib/model-check'
  * itself never calls a model: it reads that check's saved result.
  */
 
-type Check = { ok: boolean | null; detail: string }
+// warning: something is off but a backup covers it, so the status stays "ok" (the daily model check).
+type Check = { ok: boolean | null; detail: string; warning?: true }
 
 async function timed<T>(work: () => Promise<T>): Promise<{ value?: T; error?: true; ms: number }> {
   const started = Date.now()
