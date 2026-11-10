@@ -360,8 +360,11 @@ export function WrenApp({ person, github, initialChats, initialUsage, guestSiteK
             window.history.replaceState(null, '', `/chat/${event.chat.id}`)
           }
         } else if (event.t === 'recall') {
+          // Before the answer: what search found. After it: those plus the facts it used.
           recalled = event.memories
+          const { messageId, memories } = event
           setStreaming((s) => (s ? { ...s, recalled } : s))
+          setMessages((list) => list.map((m) => (m.id === messageId ? { ...m, memory: { ...m.memory, recalled: memories } } : m)))
         } else if (event.t === 'delta') {
           text += event.text
           setStreaming((s) => (s ? { ...s, text } : s))

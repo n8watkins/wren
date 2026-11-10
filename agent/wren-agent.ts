@@ -25,6 +25,7 @@ import type { ErrorCode } from '../lib/errors'
 import { DAILY_IP_LIMITS, DAILY_LIMITS, GUEST_LIMITS, nextUtcMidnight, utcDay, type UsageSnapshot } from '../lib/limits'
 import type { AutoSave, Memory, MemoryKind } from '../lib/memory'
 import { optionalSetting } from '../lib/secrets'
+import type { ChatStreamEvent } from '../lib/stream-events'
 import { ResearchRuns } from './research'
 
 /** What the API route hands over after verifying the session and the body. */
@@ -162,6 +163,9 @@ export class WrenAgent extends Agent<Cloudflare.Env> {
     const chatId = chat.id
     const memory = this.chatMemory
     const from = { userKey: request.userKey, ip: request.ip }
+    // What recall gave the model, for the chips after the answer.
+    let given: Awaited<ReturnType<ChatMemory['recall']>> = { system: '', recalled: [], facts: [] }
+    let answerText = ''
     const stream = answerStream({
       start: { t: 'start', chat, userMessage, messageId: answer.id, keySource, usage: keySource === 'demo' ? this.usage() : null },
       apiKey,
@@ -172,6 +176,7 @@ export class WrenAgent extends Agent<Cloudflare.Env> {
       baseUrl: optionalSetting(this.env, 'GEMINI_BASE_URL'),
       controller,
       save: (text, status) => {
+        answerText = text
         if (status === 'partial') updateMessage(sql, answer.id, text, 'stopped')
         else if (text) updateMessage(sql, answer.id, text, status)
         else sql.exec('DELETE FROM messages WHERE id = ?', answer.id)
@@ -180,16 +185,21 @@ export class WrenAgent extends Agent<Cloudflare.Env> {
       finish: () => this.inFlight.delete(chatId),
       // Recall: the memories that match the message, for the model and as chips on the answer.
       prepare: async () => {
-        const { system, recalled } = await memory.recall({ ...from, chatId, answerId: answer.id, text: userMessage.content })
-        return { system, events: recalled.length ? [{ t: 'recall', messageId: answer.id, memories: recalled }] : [] }
+        given = await memory.recall({ ...from, chatId, answerId: answer.id, text: userMessage.content })
+        return { system: given.system, events: given.recalled.length ? [{ t: 'recall', messageId: answer.id, memories: given.recalled }] : [] }
       },
-      // Then lasting facts from the person's message (not again on a regenerate: nothing new was said).
-      after: request.regenerate
-        ? undefined
-        : async () => {
-            const saves = await this.rememberFromChat(chatId, userMessage.id, from)
-            return saves.length ? [{ t: 'memory', messageId: userMessage.id, saves }] : []
-          },
+      // Then the facts the answer used join its chips, and Wren saves lasting
+      // facts from the person's message (not again on a regenerate: nothing new was said).
+      after: async () => {
+        const events: ChatStreamEvent[] = []
+        const chips = await memory.attribute({ ...from, chatId, answerId: answer.id, answer: answerText, facts: given.facts, recalled: given.recalled })
+        if (chips) events.push({ t: 'recall', messageId: answer.id, memories: chips })
+        if (!request.regenerate) {
+          const saves = await this.rememberFromChat(chatId, userMessage.id, from)
+          if (saves.length) events.push({ t: 'memory', messageId: userMessage.id, saves })
+        }
+        return events
+      },
     })
     return { ok: true, stream }
   }

@@ -98,6 +98,8 @@ export const MEMORY_LIMITS = {
   factsPerTurn: 3,
   /** The person's own recent messages the extractor reads. */
   extractorMessages: 4,
+  /** Wren's own facts about the person given to the model with every message (the newest). */
+  contextFacts: 40,
   /** Memories Wren recalls for one answer, at most. */
   recallCount: 4,
   /** Characters of one recalled memory given to the model (a file's start). */

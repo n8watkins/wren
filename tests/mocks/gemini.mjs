@@ -17,7 +17,8 @@
 // Memory's calls: batchEmbedContents answers with tests/mocks/embedding.mjs,
 // and generateContent (JSON) reads a PDF (the text in its "(...) Tj" strings)
 // or picks facts: each sentence of the person's messages that says "I" or
-// "my" (at most 3); "mock:fail" anywhere fails.
+// "my" (at most 3); "mock:fail" anywhere fails. Asked which facts an answer
+// used, it names each fact sharing a word of five letters or more with it.
 // It also stands in for Turnstile's siteverify (POST /siteverify).
 import { createServer } from 'node:http'
 import { mockEmbedding } from './embedding.mjs'
@@ -141,6 +142,15 @@ function memoryCall(req, res, body) {
   }
   const parts = (body.contents ?? []).flatMap((c) => c.parts ?? [])
   const text = parts.map((p) => p.text ?? '').join('\n')
+  const system = body.systemInstruction?.parts?.map((p) => p.text).join(' ') ?? ''
+  if (system.startsWith('You check which facts')) {
+    const [answerPart, factPart = ''] = text.split('\n\nFacts:\n')
+    const words = new Set(answerPart.toLowerCase().match(/[a-z]{5,}/g) ?? [])
+    const used = [...factPart.matchAll(/^\[(f\d+)\] (.*)$/gm)]
+      .filter(([, , fact]) => (fact.toLowerCase().match(/[a-z]{5,}/g) ?? []).some((w) => words.has(w)))
+      .map(([, id]) => id)
+    return json(res, 200, { candidates: [{ content: { role: 'model', parts: [{ text: JSON.stringify({ used }) }] }, index: 0 }] })
+  }
   if (/mock:fail/.test(text)) return json(res, 500, { error: { code: 500, message: 'internal', status: 'INTERNAL' } })
   const pdf = parts.find((p) => p.inlineData?.mimeType === 'application/pdf')
   const answer = pdf ? { text: pdfText(pdf.inlineData.data) } : { facts: pickFacts(text) }
