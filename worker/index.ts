@@ -58,6 +58,10 @@ function openNextResponse(request: Request, env: CloudflareEnv, ctx: ExecutionCo
   // script it renders. Any CSP header a client sent is replaced.
   const headers = new Headers(request.headers)
   headers.set('Content-Security-Policy', csp)
-  // cf (the visitor's country, lib/server/region.ts) is passed on explicitly.
-  return (openNext as OpenNextHandler).fetch(new Request(request, { headers, cf: request.cf }), env, ctx)
+  // cf (the visitor's country, lib/server/region.ts) is passed on explicitly,
+  // and so is the signal (it isn't copied to a new Request): OpenNext ends the
+  // response when it fires, so a visitor leaving cancels a streamed answer or
+  // run watch instead of OpenNext writing into the closed stream ("Unable to
+  // enqueue") while the answer runs on.
+  return (openNext as OpenNextHandler).fetch(new Request(request, { headers, cf: request.cf, signal: request.signal }), env, ctx)
 }

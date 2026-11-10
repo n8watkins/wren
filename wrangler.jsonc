@@ -6,7 +6,10 @@
   "account_id": "b2c564cf83cb9184dd6d7cc4ff8b38bf",
   "main": "worker/index.ts",
   "compatibility_date": "2026-11-04",
-  "compatibility_flags": ["nodejs_compat"],
+  // enable_request_signal: request.signal fires when the visitor disconnects
+  // (the default from 2026-11-17), so a closed tab ends its stream
+  // (worker/index.ts passes the signal to OpenNext).
+  "compatibility_flags": ["nodejs_compat", "enable_request_signal"],
   "assets": {
     "directory": ".open-next/assets",
     "binding": "ASSETS"
