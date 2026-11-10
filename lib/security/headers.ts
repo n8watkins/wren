@@ -29,6 +29,7 @@ export function buildContentSecurityPolicy({ nonce, dev = false, https = false }
     // Avatars are initials, model output may not load images, so no remote hosts.
     'img-src': ["'self'", 'data:', 'blob:'],
     'font-src': ["'self'"],
+    // 'self' covers the voice socket (wss: on https pages, ws: on local http previews).
     'connect-src': ["'self'", ...(dev ? ['ws:'] : [])],
     'media-src': ["'self'", 'blob:'],
     'worker-src': ["'self'", 'blob:'],
@@ -53,7 +54,7 @@ export function staticSecurityHeaders({ https = false }: { https?: boolean } = {
     ['Referrer-Policy', 'strict-origin-when-cross-origin'],
     ['Cross-Origin-Opener-Policy', 'same-origin'],
     ['Cross-Origin-Resource-Policy', 'same-origin'],
-    // The mic is for Wren's own voice mode (next update); everything else is off.
+    // The mic is for talking to Wren (this origin only); everything else is off.
     [
       'Permissions-Policy',
       'camera=(), microphone=(self), geolocation=(), payment=(), usb=(), serial=(), hid=(), midi=(), display-capture=(), browsing-topics=()',

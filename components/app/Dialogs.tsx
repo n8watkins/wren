@@ -37,8 +37,7 @@ export function HowItWorksDialog({
               <span className="n">1. </span>
               Talk or type
             </b>
-            <p>Type in the box and Wren answers as it writes. Soon you can tap the mic and talk, and talk over Wren to interrupt.</p>
-            <span className="later">Voice: next update</span>
+            <p>Type in the box and Wren answers as it writes, or tap the mic and talk; talk over Wren to interrupt. Both land in the same chat.</p>
           </div>
         </li>
         <li className="howi">

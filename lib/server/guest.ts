@@ -1,5 +1,6 @@
 import 'server-only'
 import { GUEST_LIMITS } from '../limits'
+import { base64url, fromBase64url } from '../security/base64url'
 
 /**
  * The guest cookie: a random id, an expiry and an HMAC over both, keyed from
@@ -12,23 +13,6 @@ const LABEL = 'wren-guest-cookie-v1'
 
 function cookieName(https: boolean): string {
   return https ? '__Host-wren_guest' : 'wren_guest'
-}
-
-function base64url(bytes: ArrayBuffer | Uint8Array): string {
-  let binary = ''
-  for (const byte of new Uint8Array(bytes)) binary += String.fromCharCode(byte)
-  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
-}
-
-function fromBase64url(value: string): Uint8Array<ArrayBuffer> | null {
-  try {
-    const binary = atob(value.replace(/-/g, '+').replace(/_/g, '/'))
-    const bytes = new Uint8Array(binary.length)
-    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i)
-    return bytes
-  } catch {
-    return null
-  }
 }
 
 async function key(secret: string): Promise<CryptoKey> {

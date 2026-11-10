@@ -60,6 +60,14 @@ export const ERRORS = {
   research_busy: { status: 409, message: 'A research run is already going. Let it finish, or cancel it first.' },
   research_unavailable: { status: 503, message: 'Research isn’t available right now. Try again later.' },
   run_not_found: { status: 404, message: "That research run doesn't exist." },
+  voice_sign_in: { status: 401, message: 'Sign in to talk with Wren: 10 voice minutes a day, with every word saved in your chat.' },
+  voice_daily_limit: {
+    status: 429,
+    message: 'You’ve used today’s 10 voice minutes. Add your own Gemini key to keep talking, or type; they come back at midnight UTC.',
+  },
+  voice_daily_limit_ip: { status: 429, message: 'This network has used today’s voice minutes. Add your own Gemini key to keep talking.' },
+  voice_ticket_invalid: { status: 403, message: 'That voice session expired before it started. Tap the mic again.' },
+  voice_unavailable: { status: 503, message: 'Voice isn’t available right now. You can keep typing.' },
   internal: { status: 500, message: 'Something went wrong on our side.' },
 } as const satisfies Record<string, { status: number; message: string }>
 

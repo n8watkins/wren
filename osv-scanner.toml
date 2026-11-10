@@ -1,0 +1,7 @@
+# Findings accepted on purpose (release-kit's OSV gate, .github/workflows/security.yml).
+# Each entry names the blocking parent and expires, so it is looked at again.
+
+[[IgnoredVulns]]
+id = "GHSA-5j98-mcp5-4vw2"
+ignoreUntil = 2027-01-10T00:00:00Z
+reason = "glob CLI command injection (-c/--cmd). Wren never runs the glob CLI: glob 10.3.3 is a build-time library dependency pinned exactly by @node-minify/core 9.0.2, from @opennextjs/aws 4.1.15 under @opennextjs/cloudflare 1.20.16 (the latest). Remove when OpenNext moves off it."

@@ -21,10 +21,14 @@ import { sqliteStore, vectorizeStore } from './memory-vectors'
 import { chooseKey } from './keys'
 import { createMeterTable, giveBack, tryTake, used } from './meter'
 import type { ErrorCode } from '../lib/errors'
-import { DAILY_IP_LIMITS, DAILY_LIMITS, GUEST_LIMITS, nextUtcMidnight, utcDay, type UsageSnapshot } from '../lib/limits'
+import { DAILY_IP_LIMITS, DAILY_LIMITS, GUEST_LIMITS, VOICE_LIMITS, nextUtcMidnight, utcDay, type UsageSnapshot } from '../lib/limits'
 import type { Memory, MemoryKind } from '../lib/memory'
 import { optionalSetting } from '../lib/secrets'
 import { ResearchRuns } from './research'
+import { connectLive } from './gemini'
+import { WREN_VOICE_PROMPT } from './persona'
+import { TicketBook, VoiceRelay, acceptVoice, readVoiceHandoff, voiceHistory, type VoiceMeter } from './voice'
+import { voiceMinutes } from '../lib/voice'
 
 /** What the API route hands over after verifying the session and the body. */
 interface ChatTurnRequest {
@@ -90,7 +94,7 @@ export class WrenAgent extends Agent<Cloudflare.Env> {
     const day = utcDay()
     return {
       chat: { used: used(this.db, day, 'chat'), limit: DAILY_LIMITS.chat },
-      voiceMinutes: { used: used(this.db, day, 'voiceMinutes'), limit: DAILY_LIMITS.voiceMinutes },
+      voiceMinutes: { used: voiceMinutes(used(this.db, day, 'voiceSeconds')), limit: DAILY_LIMITS.voiceMinutes },
       research: { used: used(this.db, day, 'research'), limit: DAILY_LIMITS.research },
       resetsAt: nextUtcMidnight(),
     }
@@ -362,5 +366,94 @@ export class WrenAgent extends Agent<Cloudflare.Env> {
       .filter((message) => message.role === 'user')
       .map((message) => ({ id: message.id, text: message.content }))
     return this.memory(userKey).rememberFacts(own, { chatId })
+  }
+
+  // ---- Voice (agent/voice.ts): Gemini Live, relayed through this agent. ----
+
+  private voiceSession?: VoiceRelay
+  private readonly voiceTickets = new TicketBook()
+
+  /** Seconds of voice left today on the demo key. */
+  private voiceSecondsLeft(): number {
+    return Math.max(0, DAILY_LIMITS.voiceMinutes * 60 - used(this.db, utcDay(), 'voiceSeconds'))
+  }
+
+  /** Whether a voice session could start now (POST /api/voice/ticket asks before signing a ticket). */
+  voiceCheck(request: { chatId?: string; ownKey: boolean }): { ok: true } | { ok: false; code: ErrorCode } {
+    if (request.chatId && !getChat(this.db, request.chatId)) return { ok: false, code: 'chat_not_found' }
+    if (request.ownKey) return { ok: true }
+    if (!optionalSetting(this.env, 'GEMINI_API_KEY')) return { ok: false, code: 'voice_unavailable' }
+    if (this.voiceSecondsLeft() <= 0) return { ok: false, code: 'voice_daily_limit' }
+    return { ok: true }
+  }
+
+  /** The person's and their network's voice seconds on the demo key. */
+  private voiceMeter(ip: string): VoiceMeter {
+    const sql = this.db
+    const network = this.env.DAILY_COUNTER.getByName(`ip:${ip}`)
+    return {
+      take: async (seconds) => {
+        const day = utcDay()
+        if (!tryTake(sql, day, 'voiceSeconds', DAILY_LIMITS.voiceMinutes * 60, seconds)) return 'voice_daily_limit'
+        if (!(await network.take('voiceSeconds', DAILY_IP_LIMITS.voiceSeconds, seconds))) {
+          giveBack(sql, day, 'voiceSeconds', seconds)
+          return 'voice_daily_limit_ip'
+        }
+        return 'ok'
+      },
+      giveBack: async (seconds) => {
+        giveBack(sql, utcDay(), 'voiceSeconds', seconds)
+        await network.giveBack('voiceSeconds', seconds)
+      },
+      secondsLeft: () => this.voiceSecondsLeft(),
+      usage: () => this.usage(),
+    }
+  }
+
+  /**
+   * The voice socket, handed over by the Worker after it checked the ticket
+   * (worker/voice.ts). One session per person: a new one ends the old.
+   */
+  override async fetch(request: Request): Promise<Response> {
+    const handoff = readVoiceHandoff(request)
+    if (!handoff) return super.fetch(request)
+    if (!this.voiceTickets.claim(handoff.nonce, handoff.expires)) return new Response(null, { status: 403 })
+    const sql = this.db
+    let chat = handoff.chatId ? getChat(sql, handoff.chatId) : null
+    if (handoff.chatId && !chat) return new Response(null, { status: 404 })
+    await this.voiceSession?.end('replaced')
+    const history = chat ? voiceHistory(historyForModel(listMessages(sql, chat.id))) : []
+    return acceptVoice((client) => {
+      const relay: VoiceRelay = new VoiceRelay({
+        client,
+        chat,
+        demoKey: optionalSetting(this.env, 'GEMINI_API_KEY'),
+        meter: this.voiceMeter(handoff.ip),
+        connect: (key, events) =>
+          connectLive(
+            {
+              ...key,
+              model: this.env.GEMINI_LIVE_MODEL,
+              systemPrompt: WREN_VOICE_PROMPT,
+              history,
+              setupMs: VOICE_LIMITS.setupMs,
+              baseUrl: optionalSetting(this.env, 'GEMINI_BASE_URL'),
+            },
+            events
+          ),
+        save: (role, text, status) => {
+          // The chat may have been deleted while talking: start a new one.
+          if (!chat || !getChat(sql, chat.id)) chat = createChat(sql, titleFrom(text))
+          const message = addMessage(sql, chat.id, role, text, status)
+          chat = getChat(sql, chat.id) ?? chat
+          return { chat, message }
+        },
+        finished: () => {
+          if (this.voiceSession === relay) this.voiceSession = undefined
+        },
+      })
+      this.voiceSession = relay
+      return relay
+    })
   }
 }

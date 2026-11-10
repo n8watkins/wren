@@ -42,6 +42,8 @@ const ROUTES: Record<string, 'public' | 'session' | 'guest'> = {
   '/api/runs/[id]': 'session',
   '/api/runs/[id]/cancel': 'session',
   '/api/runs/[id]/stream': 'session',
+  // The voice socket itself (GET /api/voice) is taken by the Worker before Next (worker/voice.ts).
+  '/api/voice/ticket': 'session',
 }
 
 describe('API routes', () => {
@@ -84,6 +86,11 @@ describe('source rules', () => {
   it('only agent/gemini.ts imports the Gemini SDK', () => {
     const importers = source.filter((f) => /from ['"]@google\/genai['"]/.test(readFileSync(f, 'utf8')))
     expect(importers.map((f) => relative(ROOT, f))).toEqual(['agent/gemini.ts'])
+  })
+
+  it('only agent/gemini.ts reaches the Gemini API, Live included', () => {
+    const callers = source.filter((f) => /generativelanguage\.googleapis\.com|BidiGenerateContent/.test(readFileSync(f, 'utf8')))
+    expect(callers.map((f) => relative(ROOT, f))).toEqual(['agent/gemini.ts'])
   })
 
   it('no request handler reads a user id from what the client sent', () => {

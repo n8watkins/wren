@@ -2,9 +2,8 @@ import { Icon, type IconName } from './Icons'
 import { DAILY_LIMITS, GUEST_LIMITS } from '@/lib/limits'
 
 /**
- * The short "How this works" explainers that tips and buttons open. Voice
- * says plainly that it arrives in the next update, Memory says which part
- * does, and Research and the meter describe what runs today.
+ * The short "How this works" explainers that tips and buttons open. Each
+ * describes what runs today, and Memory says plainly which part comes next.
  */
 export type ExplainerId = 'mic' | 'research' | 'memory' | 'meter'
 
@@ -26,11 +25,11 @@ const EXPLAINERS: Record<ExplainerId, Explainer> = {
     icon: 'mic',
     tone: 'c-em',
     kicker: 'Mic',
-    title: 'How talking will work',
-    body: 'Your mic will stream to your own agent, which relays it to Gemini Live. The reply plays back as audio while a transcript lands in this chat, and you can start talking at any time to make Wren stop and listen.',
-    flow: ['Mic', 'Your agent', 'Gemini Live', 'Voice + captions'],
-    under: 'one Durable Object per person holds the live connection and saves each turn.',
-    soon: true,
+    title: 'How talking works',
+    body: `Tap the mic and talk. Your mic streams to your own agent, which relays it to Gemini Live; Wren answers out loud, and what you both say lands in this chat as text, so you can switch between typing and talking at any time. Start talking while Wren speaks and it stops to listen. Signed in, you get ${DAILY_LIMITS.voiceMinutes} voice minutes a day on the demo key, or no limit with your own key.`,
+    flow: ['Mic', 'Your agent', 'Gemini Live', 'Voice + transcript'],
+    under: 'one Durable Object per person holds the live connection, counts the seconds and saves each turn; the Gemini key never reaches your browser.',
+    soon: false,
   },
   research: {
     icon: 'res',
