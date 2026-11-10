@@ -7,7 +7,7 @@ Wren is one Cloudflare Worker named `wren` (`wrangler.jsonc`): the Next.js app b
 - D1 database `wren` (accounts, sessions), migrations in `migrations/`.
 - Durable Objects: created by the migrations in `wrangler.jsonc` on deploy (`v1`: `WrenAgent`, `DailyCounter`; `v2`: `ModelCheck`).
 - Cron Trigger `0 14 * * *`: the daily model check (`agent/model-check.ts`), deployed with the Worker.
-  It needs a free cron slot on the account (5 on the Workers Free plan, 250 on Paid).
+  It needs a free cron slot on the account: 12 of 250 were in use on 2026-11-10 (12 is more than the Free plan allows, so the account is on Workers Paid), so Wren's makes 13.
 - Rate limiting namespaces 3101 to 3103.
 - `send_email` binding, sending from `wren@n8builds.dev`.
 

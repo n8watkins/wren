@@ -11,6 +11,8 @@
 3. **Review**, then say go for phase 2 (memory).
 4. **Tavily key** for research, before its live check: `pass-env set wren/TAVILY_API_KEY` in your own terminal, then `pass-env pipe wren/TAVILY_API_KEY -- npx wrangler secret put TAVILY_API_KEY`.
    Until then research searches with Gemini's Google Search, which needs the Gemini demo key.
+5. **Google Search grounding quota on the demo key**: in AI Studio, check the Wren key's project for its grounding (Google Search) quota and tier.
+   The daily model check got 429 on every grounded request (2026-11-10) while plain calls worked, so research's search backup likely doesn't work; `/api/health` shows it as a warning ("backup not working"), not a page, while Tavily answers.
 
 Settled: sign-in emails come from `wren@n8builds.dev`, and Wren lives at `wren.n8builds.dev` (2026-11-09).
 
@@ -21,8 +23,8 @@ Settled: sign-in emails come from `wren@n8builds.dev`, and Wren lives at `wren.n
 - Voice, once live: check a real session on wren.n8builds.dev (the mic needs https), and watch Gemini Live's per-minute cost against the 10-minute allowance.
 - Launch: portfolio card, build page on n8builds.dev, OpenPing watching `/api/health` with a JSON assertion that `status` is `"ok"` (a failed daily model check is `degraded` with HTTP 200, not a 503).
 - After the daily model check's first deploy: the next day, check that `/api/health` shows `models` with a `ranAt` from 14:00 UTC.
-- What the first real runs of the daily model check found (2026-11-10, local, on the demo key), to fix or decide on before it pages every day:
-  Google Search grounding answers 429 (`demo_busy`) on both `gemini-3.5-flash-lite` and `gemini-3.1-flash-lite`, every time, while plain calls to the same models work, so research's search backup is likely broken on the demo key (a grounding quota of zero on its tier); check the key's quota in AI Studio, or decide the grounding probe should go.
+- What the first real runs of the daily model check found (2026-11-10, local, on the demo key):
+  Google Search grounding answers 429 (`demo_busy`) on both `gemini-3.5-flash-lite` and `gemini-3.1-flash-lite`, every time, while plain calls to the same models work, so research's search backup is likely broken on the demo key (a grounding quota of zero on its tier; owner step 5); health shows it as a warning, not a page.
   The lite models are slow and flaky: a one-word reply took 2 to 9 s from `gemini-3.5-flash-lite` (one 503 after 15 s) and 1 to 20 s from `gemini-3.1-flash-lite` (one 20 s timeout, one 503 on both tries), against chat's 20 s first-text window.
   `gemini-embedding-2` (768 values), `gemini-3.8-live` (setup in under 0.6 s) and Tavily answered every time.
 
