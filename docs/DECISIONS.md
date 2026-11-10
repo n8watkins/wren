@@ -16,7 +16,7 @@ Read this before changing product, design or workflow, and add every new decisio
 - **Tips are a short guided tour** (owner, 2026-11-09): a toolbar with Skip tour, Previous (←), a "2 of 4" counter and Next (→), which reads Done on the last step; X, Esc and Skip tour end the whole tour; the arrow keys move back and forward and Enter is Next; on phones the buttons are at least 44 px and the tip stays on screen. "Show me around" in the "?" dialog starts it again.
 - **Phases** (owner, 2026-11-09; reordered from voice, research, memory): 1 foundation and chat (done), 2 memory, 3 research, 4 voice, then launch.
   Memory and research cores are built in parallel lanes; each is wired into chat one at a time, memory first.
-  Voice goes last and alone because it moves chat onto the agent's WebSocket, the code both other phases plug into.
+  Voice was planned last and alone because it would move chat onto the agent's WebSocket; that move is now its own later step (2026-11-10, below), so voice was built in parallel with memory in chat.
 - **Research searches with Tavily, with Gemini's Google Search as the backup** (owner, 2026-11-09).
   Tavily returns results and page text, so a run can show what it searched, read and cited; the backup covers Tavily being down or out of credits.
   Wren has its own key (`TAVILY_API_KEY`), never one shared with another project.
@@ -57,7 +57,7 @@ Read this before changing product, design or workflow, and add every new decisio
   `npm run preview` runs the real thing locally; `npm run dev` is for UI work and has no chat.
 - **Streaming**: the chat answer streams as newline-delimited JSON from the agent through the route to the browser.
   Closing the tab or pressing Stop ends the answer and keeps what was written.
-  Resumable streams arrive with voice, which moves chat onto the agent's WebSocket.
+  Moving typed chat onto the agent's WebSocket, with resumable streams, is a later step of its own (2026-11-10).
 - **Gemini** through `@google/genai`: `gemini-3.5-flash-lite`, with `gemini-3.1-flash-lite` as the backup (owner, 2026-11-09), set in `wrangler.jsonc` (`GEMINI_MODEL`, `GEMINI_FALLBACK_MODEL`).
   The backup is tried once when the first model fails or sends no text within 20 s; a rejected key is never retried, and an answer that already started is never restarted (`agent/gemini.ts`).
   It replaced `gemini-3.8-flash`, which stopped answering on the live site (no response within 40 s) while both lite models answered in about a second.
@@ -109,6 +109,25 @@ Read this before changing product, design or workflow, and add every new decisio
 - **Page text is untrusted data** (`agent/research-text.ts`).
   It reaches the model only between markers carrying a random id the page can't know, with anything marker-like in it defused, under instructions that it is data and never instructions.
   The plan is made from the question alone before any page is read, the report call has no tools, and the finished report keeps only citations of pages that were read and links to them: other links become plain text, bare addresses are code-quoted, reference definitions, images and HTML are removed.
+- **Voice gets its own WebSocket; typed chat stays on its NDJSON stream** (owner, 2026-11-10; changes the plan that voice would move chat onto the agent's WebSocket).
+  The voice socket carries audio and the spoken turns only; typed chat is unchanged, and moving it onto the agent's WebSocket with resumable streams is a separate later step.
+- **Voice is Gemini Live, relayed by the person's own agent** (owner decision 2026-11-09, built 2026-11-10).
+  Model: `gemini-3.8-live` (`GEMINI_LIVE_MODEL` in `wrangler.jsonc`), Google's default native-audio Live model as of November 2026; it works on an AI Studio key, has thinking built in, and answers in audio only, so both sides' words come from its input and output transcriptions.
+  The browser sends 16 kHz 16-bit PCM from an AudioWorklet (`public/voice-capture.js`) and plays Wren's 24 kHz PCM through a small jitter buffer (`lib/client/voice.ts`); the agent opens Gemini Live with the key in the `x-goog-api-key` header (never the URL) and Wren's voice persona (`agent/persona.ts`) as the system instruction, gives it the chat so far as context, and relays both ways (`agent/voice.ts`, `connectLive` in `agent/gemini.ts`).
+  Talking over Wren interrupts it (Gemini's own voice detection): the queued audio is dropped and the cut-off answer is saved as Stopped.
+  Each spoken turn is saved in the chat like a typed one, so a conversation can mix typing and talking; a typed message during a voice session goes to the session and is answered out loud.
+- **The voice socket and its ticket** (2026-11-10).
+  A Next route can't upgrade a WebSocket, so the Worker takes `GET /api/voice` before OpenNext (`worker/voice.ts`).
+  Rather than run Better Auth a second time in the Worker, `POST /api/voice/ticket` verifies the session the usual way (`authed()`: session, then burst limits), checks the minutes left, and signs a ticket good for 60 seconds that names the person, the chat and the network (an HMAC keyed from `BETTER_AUTH_SECRET` with its own label, `lib/security/voice-ticket.ts`).
+  The Worker checks the page's origin (`PUBLIC_URL`, or localhost outside production), the signature, the expiry, that the socket comes from the same CF-Connecting-IP, and the burst limits, then hands the socket to that person's agent, which takes each ticket only once.
+  One voice session per person: a new one ends the old.
+- **Voice metering** (2026-11-10): seconds, taken from the person's daily allowance (`DAILY_LIMITS.voiceMinutes`, 10) and the network's (`DAILY_IP_LIMITS.voiceSeconds`, 3 people's worth) 10 seconds ahead of use; what isn't used is given back when the session ends.
+  A session can't start with nothing left, says how much is left (counting down in the listening view, a warning in the last minute), and ends cleanly at the limit.
+  Nothing is left open: a session ends when the browser closes or goes 15 s without sending audio, after a minute with nobody talking, after 9 minutes (Gemini Live ends a connection at about 10), or when Gemini closes; the other side is closed every time.
+  The meter shows voice in tenths of a minute, rounded up, so any use shows.
+- **Voice with your own key** (2026-11-10): a person's own Gemini key works for voice too, with no daily limit, like typed chat.
+  It is sent as the first message on the voice socket (never in the URL or the ticket request), used for that session and never stored; a key Gemini rejects is an error the person sees, never a switch to the demo key.
+  Guests get no voice: the mic asks them to sign in.
 - **Plain CSS with design tokens** (`app/globals.css`) rather than a component kit, to match the mockups exactly.
 - **No incremental cache**: every page depends on who is signed in and carries a fresh CSP nonce, so OpenNext needs no R2 cache.
 

@@ -3,6 +3,7 @@ import { signInMethods } from '@/lib/server/auth'
 import { optionalSetting } from '@/lib/secrets'
 import { jsonResponse } from '@/lib/server/http'
 import { guestChatConfigured } from '@/lib/server/turnstile'
+import { DAILY_LIMITS } from '@/lib/limits'
 
 /**
  * One check per feature, for OpenPing and for a person reading it. It says
@@ -33,6 +34,18 @@ function memoryCheck(env: CloudflareEnv, demoKey: boolean): Check {
     detail: demoKey
       ? `notes, links, files and facts from chat, searched by meaning and recalled in chat (${env.GEMINI_EMBEDDING_MODEL}, ${vectors})`
       : `notes, links and files; search by meaning and recall in chat need a Gemini key (${vectors})`,
+  }
+}
+
+/** Voice needs its Live model configured; the demo key makes it work for everyone (no model call here). */
+function voiceCheck(env: CloudflareEnv, demoKey: boolean): Check {
+  const model = env.GEMINI_LIVE_MODEL?.trim()
+  if (!model) return { ok: false, detail: 'no Gemini Live model configured (GEMINI_LIVE_MODEL)' }
+  return {
+    ok: demoKey,
+    detail: demoKey
+      ? `${model} through each person's agent, ${DAILY_LIMITS.voiceMinutes} minutes a day on the demo key`
+      : `${model}: no demo key yet, voice works with your own Gemini key`,
   }
 }
 
@@ -70,7 +83,7 @@ export async function GET(): Promise<Response> {
     },
     signInEmail: { ok: methods.email, detail: `sign-in links by ${env.EMAIL_TRANSPORT === 'outbox' ? 'local outbox' : 'Cloudflare Email Service'}` },
     signInGithub: { ok: methods.github, detail: methods.github ? 'GitHub sign-in is set up' : 'GitHub OAuth app not set up yet' },
-    voice: { ok: null, detail: 'coming in the next update' },
+    voice: voiceCheck(env, demoKey),
     research: {
       ok: demoKey,
       detail: !demoKey

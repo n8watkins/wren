@@ -43,13 +43,15 @@
     "@types/node": "^24.19.2",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "@types/ws": "^8.18.2",
     "eslint": "^10.14.0",
     "eslint-config-next": "16.4.5",
     "knip": "^6.44.2",
     "release-kit": "github:n8watkins/release-kit#v2.8.1",
     "typescript": "~6.0.3",
     "vitest": "^5.1.0",
-    "wrangler": "^4.158.0"
+    "wrangler": "^4.158.0",
+    "ws": "^8.22.1"
   },
   "allowScripts": {
     "esbuild": true,

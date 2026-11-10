@@ -19,9 +19,11 @@
 // or picks facts: each sentence of the person's messages that says "I" or
 // "my" (at most 3); "mock:fail" anywhere fails. Asked which facts an answer
 // used, it names each fact sharing a word of five letters or more with it.
-// It also stands in for Turnstile's siteverify (POST /siteverify).
+// It also stands in for Turnstile's siteverify (POST /siteverify), and for
+// Gemini Live's WebSocket (tests/mocks/live.mjs).
 import { createServer } from 'node:http'
 import { mockEmbedding } from './embedding.mjs'
+import { attachLive } from './live.mjs'
 
 const port = Number(process.env.MOCK_GEMINI_PORT ?? 3127)
 const host = process.env.E2E_HOST ?? '127.0.0.2'
@@ -171,7 +173,7 @@ function sse(res, chunks, delay) {
   next()
 }
 
-createServer((req, res) => {
+const server = createServer((req, res) => {
   if (req.method === 'GET' && req.url === '/health') return res.end('ok')
   let raw = ''
   req.on('data', (c) => (raw += c))
@@ -213,4 +215,7 @@ createServer((req, res) => {
     const reply = `You said: "${last}". This is turn ${turns.filter((t) => t.role === 'user').length} of our **chat**.`
     return sse(res, reply.match(/.{1,12}/gs) ?? [reply], 15)
   })
-}).listen(port, host, () => console.log(`mock gemini on ${host}:${port}`))
+})
+// Voice: Gemini Live's WebSocket (tests/mocks/live.mjs).
+attachLive(server)
+server.listen(port, host, () => console.log(`mock gemini on ${host}:${port}`))

@@ -3,11 +3,14 @@
 import { useEffect, useRef, type KeyboardEvent } from 'react'
 import { SIZE_LIMITS } from '@/lib/limits'
 import { Icon } from '../Icons'
+import type { VoiceView } from './useVoice'
+import { VoicePanel } from './VoicePanel'
 
 /**
  * The composer: typing and the mic always side by side, plus Research. On a
  * desktop it is the boxed composer; on a phone the rounded bar with the big
- * mic within thumb reach (globals.css shows one or the other).
+ * mic within thumb reach (globals.css shows one or the other). While Wren is
+ * listening, the listening view sits on top and typing still works.
  */
 export function Composer({
   draft,
@@ -19,17 +22,23 @@ export function Composer({
   onSend,
   onStop,
   onExplain,
+  voice,
+  onMic,
   focusKey,
 }: {
   draft: string
   setDraft: (value: string) => void
   busy: boolean
-  error: { message: string; signIn: boolean } | null
+  error: { message: string; signIn: boolean; info?: boolean } | null
   onDismissError: () => void
   onSignIn: () => void
   onSend: () => void
   onStop: () => void
-  onExplain: (id: 'mic' | 'research' | 'memory') => void
+  onExplain: (id: 'research' | 'memory') => void
+  /** The voice session, while there is one. */
+  voice: VoiceView | null
+  /** Starts talking, or ends it. */
+  onMic: () => void
   focusKey: number
 }) {
   const desk = useRef<HTMLTextAreaElement>(null)
@@ -58,8 +67,8 @@ export function Composer({
   }
 
   const alert = error ? (
-    <div className="alert" role="alert" data-testid="chat-error">
-      <Icon name="alert" />
+    <div className={error.info ? 'alert info' : 'alert'} role="alert" data-testid="chat-error">
+      <Icon name={error.info ? 'mic' : 'alert'} />
       <p>{error.message}</p>
       {error.signIn && (
         <button type="button" className="btn pri" onClick={onSignIn} data-testid="error-sign-in">
@@ -89,10 +98,27 @@ export function Composer({
     </button>
   )
 
+  const mic = (
+    <button
+      type="button"
+      className={voice ? 'mic on' : 'mic'}
+      onClick={onMic}
+      aria-label={voice ? 'End voice' : 'Talk to Wren'}
+      aria-pressed={voice !== null}
+      title={voice ? 'End voice' : 'Talk to Wren'}
+      data-tip="mic"
+      data-testid="mic"
+    >
+      <Icon name="mic" />
+    </button>
+  )
+  const panel = voice ? <VoicePanel view={voice} onEnd={onMic} /> : null
+
   return (
     <>
       <div className="composer">
         {alert}
+        {panel}
         <div className="cbox">
           <label className="sr-only" htmlFor="composer-desk">
             Message Wren
@@ -103,7 +129,7 @@ export function Composer({
             rows={1}
             value={draft}
             maxLength={SIZE_LIMITS.messageChars}
-            placeholder="Message Wren, or tap the mic and just talk"
+            placeholder={voice ? 'Type to Wren while you talk' : 'Message Wren, or tap the mic and just talk'}
             onChange={(event) => setDraft(event.target.value)}
             onKeyDown={onKeyDown}
             data-testid="composer"
@@ -117,9 +143,7 @@ export function Composer({
               Research
             </button>
             <span className="sp" />
-            <button type="button" className="mic" onClick={() => onExplain('mic')} aria-label="Talk (next update)" data-tip="mic">
-              <Icon name="mic" />
-            </button>
+            {mic}
             {sendOrStop}
           </div>
         </div>
@@ -127,6 +151,7 @@ export function Composer({
       </div>
       <div className="mcomp">
         {alert}
+        {panel}
         <div className="mcb">
           <button type="button" className="rb" onClick={() => onExplain('research')} aria-label="Research (next update)" data-tip="res">
             <Icon name="res" />
@@ -140,14 +165,12 @@ export function Composer({
             rows={1}
             value={draft}
             maxLength={SIZE_LIMITS.messageChars}
-            placeholder="Message or talk"
+            placeholder={voice ? 'Type while you talk' : 'Message or talk'}
             onChange={(event) => setDraft(event.target.value)}
             onKeyDown={onKeyDown}
             data-testid="composer-phone"
           />
-          <button type="button" className="mic" onClick={() => onExplain('mic')} aria-label="Talk (next update)" data-tip="mic">
-            <Icon name="mic" />
-          </button>
+          {mic}
           {(busy || draft.trim()) && sendOrStop}
         </div>
       </div>

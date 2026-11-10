@@ -105,7 +105,7 @@ test('"How this works" opens the explainer and the tour carries on after it', as
   const tip = page.getByTestId('tip')
   await tip.getByRole('button', { name: 'How this works' }).click()
   const explainer = page.getByTestId('explainer')
-  await expect(explainer).toContainText('How talking will work')
+  await expect(explainer).toContainText('How talking works')
   await expect(tip).toHaveCount(0)
   await explainer.getByRole('button', { name: 'Got it' }).click()
   await expect(tip).toHaveAttribute('data-tip-id', 'mic')
