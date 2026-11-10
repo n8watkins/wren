@@ -5,6 +5,8 @@
 //   "mock:slow ..."     streams 40 chunks, 150 ms apart (for Stop)
 //   "mock:xss"          answers with hostile Markdown and HTML
 //   "mock:fail"         a 500 before any text
+//   "mock:history"      repeats how Wren's previous turn began, and whether it
+//                       holds a report's sources (research in chat)
 //   anything about a heat pump: a realistic Markdown answer (for screenshots)
 // and on the key: one starting "bad-" gets Gemini's invalid-key answer.
 // Research uses generateContent (not streamed), told apart by its system prompt:
@@ -210,6 +212,11 @@ const server = createServer((req, res) => {
       return
     }
     if (last.startsWith('mock:xss')) return sse(res, [XSS], 10)
+    if (last.startsWith('mock:history')) {
+      const before = turns.filter((t) => t.role === 'model').at(-1)?.parts?.[0]?.text ?? ''
+      const reply = `Your last turn began: ${before.split('\n')[0].slice(0, 120)} Sources listed: ${before.includes('\nSources:\n[1] ') ? 'yes' : 'no'}.`
+      return sse(res, reply.match(/.{1,16}/gs) ?? [reply], 10)
+    }
     if (/heat pump/i.test(last)) return sse(res, SAMPLE.match(/.{1,24}/gs), 12)
     if (last.startsWith('mock:slow')) return sse(res, Array.from({ length: 40 }, (_, n) => `word${n} `), 150)
     const reply = `You said: "${last}". This is turn ${turns.filter((t) => t.role === 'user').length} of our **chat**.`

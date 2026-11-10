@@ -7,7 +7,8 @@
 // guest cap is low, and the burst limits are raised so parallel tests from one
 // IP aren't throttled
 // (the limits themselves are Cloudflare's; the daily meter is tested as is).
-// E2E_SKIP_BUILD=1 reuses the last build.
+// E2E_SKIP_BUILD=1 reuses the last build; E2E_INSPECTOR_PORT picks wrangler's
+// inspector port, so test servers running side by side don't fight over 9229.
 import { execFileSync, spawn } from 'node:child_process'
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 
@@ -60,8 +61,11 @@ const run = (cmd, args) => execFileSync(cmd, args, { stdio: 'inherit' })
 if (!process.env.E2E_SKIP_BUILD) run('npx', ['opennextjs-cloudflare', 'build'])
 run('npx', ['wrangler', 'd1', 'migrations', 'apply', 'wren', '--local', '-c', `${dir}/wrangler.jsonc`, '--persist-to', state])
 
-const server = spawn('npx', ['wrangler', 'dev', '-c', `${dir}/wrangler.jsonc`, '--ip', host, '--port', port, '--persist-to', state, '--log-level', 'warn'], {
-  stdio: 'inherit',
-})
+const inspector = process.env.E2E_INSPECTOR_PORT ? ['--inspector-port', process.env.E2E_INSPECTOR_PORT] : []
+const server = spawn(
+  'npx',
+  ['wrangler', 'dev', '-c', `${dir}/wrangler.jsonc`, '--ip', host, '--port', port, '--persist-to', state, '--log-level', 'warn', ...inspector],
+  { stdio: 'inherit' }
+)
 for (const signal of ['SIGINT', 'SIGTERM']) process.on(signal, () => server.kill(signal))
 server.on('exit', (code) => process.exit(code ?? 0))

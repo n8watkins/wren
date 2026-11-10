@@ -159,8 +159,9 @@ export function ResearchAnswer({
             <Icon name={copied ? 'check' : 'copy'} />
             {copied ? 'Copied' : 'Copy'}
           </button>
-          {memory && <SaveToMemory messageId={message.id} savedAs={message.memory?.savedAs} memory={memory} label="Save findings to memory" />}
           {fullRun}
+          {/* Last, so its label changing never moves another control under the pointer. */}
+          {memory && <SaveToMemory messageId={message.id} savedAs={message.memory?.savedAs} memory={memory} label="Save findings to memory" />}
         </div>
       </>
     )

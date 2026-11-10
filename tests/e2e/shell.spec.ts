@@ -51,12 +51,10 @@ test('Voice, Research and Memory ask guests to sign in', async ({ page }) => {
   await page.keyboard.press('Escape')
   await expect(page.getByTestId('sign-in')).toBeHidden()
 
-  const explainer = page.getByTestId('explainer')
   await scope.locator('[data-tip="res"]').click()
-  await expect(explainer).toContainText('How research works')
-  await expect(explainer).toContainText('Start a run from Research runs')
-  await expect(explainer).not.toContainText('Coming in the next update')
+  await expect(page.getByTestId('sign-in')).toContainText('Sign in to research: 3 runs a day, with each report in your chat.')
   await page.keyboard.press('Escape')
+  await expect(page.getByTestId('sign-in')).toBeHidden()
 
   // Memory works now, for people who sign in; guests are told why they have none.
   await page.goto('/memory')
