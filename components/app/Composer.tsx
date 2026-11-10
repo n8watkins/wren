@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, type KeyboardEvent } from 'react'
+import { useEffect, useRef, type KeyboardEvent, type ReactNode } from 'react'
 import { RESEARCH_LIMITS, SIZE_LIMITS } from '@/lib/limits'
 import { Icon } from '../Icons'
 import type { VoiceView } from './useVoice'
@@ -45,6 +45,7 @@ export function Composer({
   voice,
   onMic,
   focusKey,
+  notice,
 }: {
   draft: string
   setDraft: (value: string) => void
@@ -63,6 +64,8 @@ export function Composer({
   /** Starts talking, or ends it. */
   onMic: () => void
   focusKey: number
+  /** The free-demo notice (components/app/DemoNotice.tsx), while it is on. */
+  notice?: ReactNode
 }) {
   const desk = useRef<HTMLTextAreaElement>(null)
   const phone = useRef<HTMLTextAreaElement>(null)
@@ -164,6 +167,7 @@ export function Composer({
   return (
     <>
       <div className="composer">
+        {notice}
         {alert}
         {panel}
         <div className={researching ? 'cbox research' : 'cbox'}>
@@ -199,6 +203,7 @@ export function Composer({
         </div>
       </div>
       <div className="mcomp">
+        {notice}
         {alert}
         {panel}
         {researching && (

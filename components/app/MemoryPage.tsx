@@ -17,6 +17,7 @@ import type { ExplainerId } from '../explainers'
 import { Icon, type IconName } from '../Icons'
 import { WrenMark } from '../WrenMark'
 import styles from './MemoryPage.module.css'
+import { MEMORY_REMINDER } from './DemoNotice'
 
 /**
  * The Memory library (/memory): everything the person saved and every fact
@@ -238,6 +239,11 @@ function Library({
           </div>
         </div>
 
+        {!userKey && (
+          <p className={`fine ${styles.reminder}`} data-testid="memory-reminder">
+            What you add here, and the lasting facts Wren saves from your chats, stay in your Memory. {MEMORY_REMINDER}
+          </p>
+        )}
         {full && (
           <p className={styles.warn} data-testid="memory-full">
             <Icon name="alert" />

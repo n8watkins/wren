@@ -7,6 +7,7 @@ import { memoryApi, memoryHref } from '@/lib/client/memory-api'
 import { errorMessage } from '@/lib/errors'
 import type { AutoSave, RecalledMemory } from '@/lib/memory'
 import { Icon } from '../Icons'
+import { MEMORY_REMINDER } from './DemoNotice'
 
 /**
  * Memory in the chat thread, for signed-in people only: the "From your
@@ -76,7 +77,12 @@ function SavedLine({ save, memory }: { save: AutoSave; memory: ThreadMemory }) {
       ? 'Updated in Memory'
       : 'Saved to Memory'
   return (
-    <div className={undone ? 'saved off' : 'saved'} data-testid="memory-saved" data-undone={undone || undefined}>
+    <div
+      className={undone ? 'saved off' : 'saved'}
+      data-testid="memory-saved"
+      data-undone={undone || undefined}
+      title={undone ? undefined : MEMORY_REMINDER}
+    >
       <Icon name={undone ? 'redo' : 'check'} />
       <span className="st">{status}</span>
       {undone ? (

@@ -1409,6 +1409,72 @@ svg.wren.talking .head {
   color: var(--ember);
 }
 
+/* ---------- the free-demo notice (components/app/DemoNotice.tsx) ---------- */
+.demo {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  border-radius: 12px;
+  padding: 10px 12px;
+  margin-bottom: 10px;
+  font-size: 13px;
+  line-height: 1.45;
+  background: var(--surface-2);
+  color: var(--text);
+  border: 1px solid var(--line-strong);
+}
+.demo > svg {
+  flex: none;
+  margin-top: 2px;
+  color: var(--ember);
+}
+.demo .dtext {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+}
+.demo p {
+  margin: 0;
+  color: var(--text-2);
+}
+.demo .dnudge {
+  color: var(--text);
+  font-weight: 500;
+}
+.demo.strong {
+  background: var(--ember-soft);
+  border-color: color-mix(in srgb, var(--ember) 35%, transparent);
+}
+.demo .btn {
+  height: 30px;
+  padding: 0 12px;
+  font-size: 13px;
+}
+.demo .dismiss {
+  flex: none;
+  border: 0;
+  background: none;
+  padding: 0;
+  margin-top: 1px;
+  color: var(--text-2);
+  display: grid;
+  place-items: center;
+}
+.demo.inbox {
+  margin: 0 0 4px;
+}
+.keyhow {
+  margin: 0;
+  padding-left: 20px;
+  font-size: 13.5px;
+  color: var(--text-2);
+  display: grid;
+  gap: 4px;
+}
+
 /* ---------- voice: the active mic and the listening view ---------- */
 .mic.on {
   background: var(--ember);
@@ -1641,7 +1707,8 @@ svg.wren.talking .head {
     padding: 8px 12px;
     position: relative;
   }
-  .mcomp .alert {
+  .mcomp .alert,
+  .mcomp .demo {
     margin: 0 0 8px;
   }
   .mcomp .voice {

@@ -24,6 +24,17 @@ Read this before changing product, design or workflow, and add every new decisio
   Either way the run doesn't count against the person's daily runs, like every run that ends without a report.
   Without `TAVILY_API_KEY` research is off: starting a run answers `research_unavailable` and `/api/health` reports research as not ok.
   Wren has its own key (`TAVILY_API_KEY`), never one shared with another project.
+- **Free tier everywhere, with a demo notice and a push for your own key** (owner, 2026-11-10).
+  Wren's demo key stays on Gemini's free tier, and Wren works the same in every country: no region is blocked.
+  Google's terms (https://ai.google.dev/gemini-api/terms) reserve the free tier from apps used in the European Economic Area, Switzerland and the UK, and ask free-tier users not to send personal information; the owner accepts this risk for the demo.
+  Revisit at the public launch, or when traffic grows (paid billing on the demo key removes the issue).
+  What Wren does instead: a calm notice above the composer for everyone, until dismissed or until a key of their own is on, and again in the "?" dialog and the key dialog: "This is a free demo running on Google Gemini's free tier. Please don't share personal details (names, contact info, health, finances, anything private) with the demo. For real use, add your own Gemini key." (`components/app/DemoNotice.tsx`).
+  "Use your own key" is its button, and the key dialog has a three-step how-to (Google AI Studio's API keys page, Create API key, paste) and says the key stays in the browser.
+  Memory carries the same reminder: on the Memory page, in its explainer, and on each "Saved to Memory" line.
+  Visitors from the EEA, Switzerland and the UK get the same notice with a firmer line naming where they are ("You're visiting from the United Kingdom. Google's terms reserve Gemini's free tier from apps used in the UK, the EU/EEA and Switzerland, so please use Wren with your own Gemini key there.").
+  The country comes only from Cloudflare (`request.cf.country`, read in `lib/server/region.ts`), never from the browser or the CF-IPCountry header (a lint rule rejects it), and the country list lives in one place with its source (`lib/region.ts`: the 27 EU states with Åland and France's outermost regions, Iceland, Liechtenstein, Norway, Switzerland, the UK).
+  E2E tests say where they visit from with an `X-Wren-Test-Country` header that only the test server honours (`REGION_TEST_HEADER`, never in production).
+  An earlier plan the same day, to block AI features in those regions unless the visitor brought their own key, was dropped before it shipped.
 - **Memory saves both ways** (owner, 2026-11-09): Wren saves short, lasting facts from a conversation on its own (preferences, projects, recurring topics), and a "Save to Memory" button saves anything you choose.
   Every save Wren makes on its own shows a "Saved to Memory · Undo" line in the chat, so nothing is saved silently, and the Memory library lists, edits and deletes everything.
   Guests get no memory, as nothing of theirs is saved past the tab.

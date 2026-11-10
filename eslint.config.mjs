@@ -31,6 +31,11 @@ const eslintConfig = defineConfig([
           selector: "Literal[value=/^(x-forwarded-for|x-real-ip|true-client-ip|x-client-ip|forwarded)$/i]",
           message: 'Use clientIp() (CF-Connecting-IP); other IP headers are set by the client.',
         },
+        // The visitor's country comes from request.cf.country only (lib/server/region.ts).
+        {
+          selector: "Literal[value=/^cf-ipcountry$/i]",
+          message: "Use visitorRegion() (request.cf.country); a client can send CF-IPCountry itself.",
+        },
         // Identity comes from the verified session only, never from what the client sent.
         {
           selector: "MemberExpression[object.name=/^(body|query|params|searchParams|data|parsed|input)$/][property.name=/^user_?[iI]d$/]",

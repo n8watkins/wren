@@ -14,6 +14,8 @@ export const KEYS = {
   seenHow: 'wren:seen-how-it-works',
   tips: 'wren:tips',
   theme: 'wren:theme',
+  /** "1" once the free-demo notice above the composer is dismissed. */
+  demoNotice: 'wren:demo-notice-dismissed',
 } as const
 
 /** A guest's chat: only in this tab (sessionStorage), never on the server. */

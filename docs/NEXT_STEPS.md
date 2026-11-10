@@ -18,6 +18,7 @@ Settled: sign-in emails come from `wren@n8builds.dev`, and Wren lives at `wren.n
 
 - Typed chat onto the agent's WebSocket, with resumable streams (split out of phase 4 on 2026-11-10; voice already has its own socket).
 - Voice, once live: check a real session on wren.n8builds.dev (the mic needs https), and watch Gemini Live's per-minute cost against the 10-minute allowance.
+- At the public launch, or when traffic grows: revisit the free-tier decision (paid billing on the demo key, docs/DECISIONS.md).
 - Launch (next): portfolio card, build page on n8builds.dev, OpenPing watching `/api/health` with a JSON assertion that `status` is `"ok"` (a failed daily model check is `degraded` with HTTP 200, not a 503).
 - After the daily model check's first deploy: the next day, check that `/api/health` shows `models` with a `ranAt` from 14:00 UTC.
 - What the first real runs of the daily model check found (2026-11-10, local, on the demo key):
@@ -27,6 +28,7 @@ Settled: sign-in emails come from `wren@n8builds.dev`, and Wren lives at `wren.n
 
 ## Done
 
+- 2026-11-10: free-demo notice for everyone with a push for your own key (a how-to in the key dialog), Memory's reminder, and a firmer nudge for visitors from the EEA, Switzerland and the UK; nothing is blocked.
 - 2026-11-10: chat switches to the backup model after 10 s without text from the first model (was 20 s).
 - 2026-11-10: Tavily is research's only search: the Gemini Google Search backup is removed, and a run that can't search says why and doesn't count.
 - 2026-11-10: research in chat (phase 3): Research mode in the composer and "Research this" on answers, the run as a live saffron card with Stop that reattaches after a reload, the report and its sources landing in the chat as part of the conversation, "Save findings to memory", and which service searched.

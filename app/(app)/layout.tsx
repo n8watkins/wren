@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
 import { headers } from 'next/headers'
+import { getCloudflareContext } from '@opennextjs/cloudflare'
 import { WrenApp } from '@/components/app/WrenApp'
 import type { ChatSummary } from '@/agent/chats'
 import type { UsageSnapshot } from '@/lib/limits'
@@ -9,12 +10,14 @@ import { getEnv } from '@/lib/server/env'
 import { readGuest } from '@/lib/server/guest'
 import { getVerifiedSession } from '@/lib/server/session'
 import { guestChatConfigured } from '@/lib/server/turnstile'
+import { visitorRegion } from '@/lib/server/region'
 import { log } from '@/lib/log'
 
 /**
  * Every app route shares this shell. The server works out who is signed in
  * (from the session cookie, checked against D1) and hands the client their
- * chats and today's usage; the routes themselves render nothing extra.
+ * chats and today's usage, and the visitor's region from Cloudflare's country
+ * (for the free-demo notice); the routes themselves render nothing extra.
  */
 export default async function AppLayout({ children }: { children: ReactNode }) {
   const env = getEnv()
@@ -50,6 +53,7 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
         initialChats={chats}
         initialUsage={usage}
         guestSiteKey={guestOn ? env.TURNSTILE_SITE_KEY : null}
+        region={visitorRegion(getCloudflareContext().cf, requestHeaders, env)}
       />
       {children}
     </>

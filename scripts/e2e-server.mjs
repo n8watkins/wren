@@ -53,6 +53,9 @@ config.vars = {
   TURNSTILE_VERIFY_URL: `http://${host}:${mockPort}/siteverify`,
   // Low enough for tests/e2e/guest-cap.spec.ts to reach after the other tests.
   GUEST_SITE_DAILY_CAP: '120',
+  // Lets a test say which country it visits from (X-Wren-Test-Country,
+  // lib/server/region.ts). Ignored outside test runs and always in production.
+  REGION_TEST_HEADER: 'on',
 }
 delete config.secrets
 mkdirSync(dir, { recursive: true })

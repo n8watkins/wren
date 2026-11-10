@@ -24,6 +24,8 @@ import { Runs } from './Runs'
 import { Thread, type StreamingAnswer } from './Thread'
 import { Tips } from './Tips'
 import { useVoice } from './useVoice'
+import { DemoNotice } from './DemoNotice'
+import type { Region } from '@/lib/region'
 
 export interface WrenAppProps {
   person: Person | null
@@ -32,6 +34,8 @@ export interface WrenAppProps {
   initialUsage: UsageSnapshot | null
   /** Turnstile's public site key when guest chat is on; null means guests must sign in. */
   guestSiteKey: string | null
+  /** From Cloudflare's country, on the server: visitors from the EEA, Switzerland and the UK get a firmer own-key nudge. */
+  region: Region
 }
 
 /** Wren's last automatic save of a voice session takes a few seconds after it ends (one or two Gemini calls). */
@@ -113,7 +117,7 @@ type Modal =
   | null
 
 /** The whole app: one client shell that the routes (/, /chat/:id, /runs, /memory) share. */
-export function WrenApp({ person, github, initialChats, initialUsage, guestSiteKey }: WrenAppProps) {
+export function WrenApp({ person, github, initialChats, initialUsage, guestSiteKey, region }: WrenAppProps) {
   const router = useRouter()
   const pathname = usePathname()
   const { place, chatId } = placeFrom(pathname)
@@ -163,6 +167,10 @@ export function WrenApp({ person, github, initialChats, initialUsage, guestSiteK
   // The server assumes the explainer was seen, so it only opens after hydration.
   const firstVisit = useLocalSetting(KEYS.seenHow, '1') === null
   const tips = parseTips(useLocalSetting(KEYS.tips))
+  // The free-demo notice stays until dismissed or until a key of your own is on.
+  // Like the explainer it appears after hydration, so a returning visitor who
+  // dismissed it never sees it flash.
+  const demoNoticeOn = useLocalSetting(KEYS.demoNotice, '1') === null && userKey === null
   const abortRef = useRef<AbortController | null>(null)
   const streamChatRef = useRef<string | null>(null)
   // A chat this tab just created, until its address (/chat/<id>) is committed:
@@ -738,6 +746,11 @@ export function WrenApp({ person, github, initialChats, initialUsage, guestSiteK
             voice={voice.view}
             onMic={toggleVoice}
             focusKey={focusKey}
+            notice={
+              demoNoticeOn ? (
+                <DemoNotice region={region} onKey={() => setModal({ kind: 'key' })} onDismiss={() => writeLocal(KEYS.demoNotice, '1')} />
+              ) : null
+            }
           />
         )}
         <BottomNav place={place} />
@@ -746,6 +759,11 @@ export function WrenApp({ person, github, initialChats, initialUsage, guestSiteK
       <HowItWorksDialog
         open={modal?.kind === 'how' || (firstVisit && modal === null)}
         onClose={closeHow}
+        region={region}
+        onKey={() => {
+          writeLocal(KEYS.seenHow, '1')
+          setModal({ kind: 'key' })
+        }}
         onShowAround={() => {
           closeHow()
           saveTips({ active: true, step: 0 })
@@ -757,7 +775,7 @@ export function WrenApp({ person, github, initialChats, initialUsage, guestSiteK
         reason={modal?.kind === 'sign-in' ? modal.reason : null}
         github={github}
       />
-      <KeyDialog open={modal?.kind === 'key'} onClose={() => setModal(null)} current={userKey} onSave={saveKey} />
+      <KeyDialog open={modal?.kind === 'key'} onClose={() => setModal(null)} current={userKey} onSave={saveKey} region={region} />
       <ExplainerDialog id={modal?.kind === 'explain' ? modal.id : null} onClose={() => setModal(null)} />
       <ConfirmDeleteDialog
         title={modal?.kind === 'delete' ? modal.chat.title : null}

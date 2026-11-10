@@ -2,6 +2,8 @@
 
 import { useState, type FormEvent } from 'react'
 import { authClient } from '@/lib/client/auth-client'
+import type { Region } from '@/lib/region'
+import { DemoNoticeBox } from './DemoNotice'
 import { Dialog } from '../Dialog'
 import { ExplainerBody, type ExplainerId } from '../explainers'
 import { Icon } from '../Icons'
@@ -12,10 +14,15 @@ export function HowItWorksDialog({
   open,
   onClose,
   onShowAround,
+  onKey,
+  region,
 }: {
   open: boolean
   onClose: () => void
   onShowAround: () => void
+  /** Opens the key dialog. */
+  onKey: () => void
+  region: Region
 }) {
   return (
     <Dialog open={open} onClose={onClose} label="How Wren works" testId="how-it-works">
@@ -26,6 +33,7 @@ export function HowItWorksDialog({
           <p>Four things to know before you start.</p>
         </div>
       </div>
+      <DemoNoticeBox region={region} />
       <ol className="how">
         <li className="howi">
           <span className="hi c-em">
@@ -78,7 +86,11 @@ export function HowItWorksDialog({
             </b>
             <p>
               Try it as a guest: 5 messages a day, kept only in this tab. Sign in for 10x more messages, voice, research and
-              memory, with your chats saved. Or add your own Gemini key to lift the limit; it&rsquo;s kept in this browser.
+              memory, with your chats saved. For real use,{' '}
+              <button type="button" className="linkbtn" onClick={onKey} data-testid="how-own-key">
+                add your own Gemini key
+              </button>
+              : no daily limit, and it&rsquo;s kept in this browser.
             </p>
           </div>
         </li>
@@ -223,11 +235,13 @@ export function KeyDialog({
   onClose,
   current,
   onSave,
+  region,
 }: {
   open: boolean
   onClose: () => void
   current: string | null
   onSave: (key: string | null) => void
+  region: Region
 }) {
   const [value, setValue] = useState('')
   const [error, setError] = useState<string | null>(null)
@@ -255,6 +269,7 @@ export function KeyDialog({
         </div>
       </div>
       <div className="stack">
+        {!current && <DemoNoticeBox region={region} />}
         {current ? (
           <div className="okbox" role="status">
             <Icon name="check" />
@@ -298,13 +313,22 @@ export function KeyDialog({
             Remove key
           </button>
         )}
+        {!current && (
+          <ol className="keyhow" aria-label="How to get a key" data-testid="key-how">
+            <li>
+              Open{' '}
+              <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener noreferrer">
+                Google AI Studio&rsquo;s API keys page
+              </a>{' '}
+              and sign in with a Google account.
+            </li>
+            <li>Choose Create API key and copy it.</li>
+            <li>Paste it above and save. It works at once.</li>
+          </ol>
+        )}
         <p className="fine">
-          Kept in this browser only and sent with your own messages. Wren never stores or logs it, and if Gemini rejects it you
-          see an error: Wren doesn&rsquo;t switch to the demo key. Get a key at{' '}
-          <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener noreferrer">
-            aistudio.google.com
-          </a>
-          .
+          Your key stays in this browser: it is sent only with your own requests, and Wren never stores or logs it on the
+          server. If Gemini rejects it you see an error; Wren doesn&rsquo;t switch to the demo key.
         </p>
       </div>
     </Dialog>
