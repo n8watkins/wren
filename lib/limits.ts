@@ -122,6 +122,20 @@ export const VOICE_LIMITS = {
   controlChars: SIZE_LIMITS.messageChars + SIZE_LIMITS.apiKeyChars + 200,
   /** Earlier messages of the chat given to Gemini Live as context. */
   historyChars: 20_000,
+  /** How long a memory tool (search_memory, save_to_memory) may take before Wren is told it failed: the model waits, silent, meanwhile. */
+  memoryToolMs: 5_000,
+  /** Memory tool calls in one spoken turn; more get an error, so a turn can't run up memory calls. */
+  memoryToolsPerTurn: 3,
+  /** Characters of one memory Wren is given back from search_memory (it speaks, so it needs little). */
+  memoryResultChars: 600,
+  /** Wren's automatic save reads the spoken turns in batches: every this many finished answers, and once when the session ends. */
+  rememberEveryTurns: 5,
+  /** Your messages one batch reads at most (spoken turns are short). */
+  rememberMessages: 10,
+  /** The "facts used" check runs on an answer only when the person said at least this many words... */
+  factsCheckSaidWords: 4,
+  /** ...and the answer has at least this many (or search_memory ran for it): small talk can't have used a fact. */
+  factsCheckAnswerWords: 12,
 } as const
 
 

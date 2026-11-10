@@ -1,6 +1,7 @@
 import type { ChatMessage, ChatSummary } from '@/agent/chats'
 import { SIGN_IN_FIXES, errorMessage, isErrorCode } from '@/lib/errors'
 import type { UsageSnapshot } from '@/lib/limits'
+import type { MessageMemory } from '@/lib/memory'
 import { VOICE_OUTPUT_RATE, type VoiceEndReason, type VoiceServerMessage, type VoiceState } from '@/lib/voice'
 import { ApiError, request } from './api'
 
@@ -28,6 +29,8 @@ export interface VoiceHandlers {
   level(level: number): void
   interim(role: 'user' | 'model', text: string): void
   message(chat: ChatSummary, message: ChatMessage): void
+  /** Memory's marks on a saved message changed: its chips, or a "Saved to Memory" line. */
+  marks(messageId: string, memory: MessageMemory | null): void
   /** `secondsLeft` is null on the person's own key. */
   usage(usage: UsageSnapshot | null, secondsLeft: number | null): void
   /** The session is over; `problem` says why when the person didn't end it. */
@@ -248,6 +251,9 @@ export class VoiceSession {
       case 'message':
         this.handlers.interim(message.message.role, '')
         this.handlers.message(message.chat, message.message)
+        break
+      case 'marks':
+        this.handlers.marks(message.messageId, message.memory)
         break
       case 'interrupted':
         this.playback?.clear()

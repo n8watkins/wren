@@ -271,7 +271,8 @@ export class ChatMemory {
     return [...input.recalled, ...used.map(toRecalled)]
   }
 
-  private record(chatId: string, answerId: string, memories: Memory[]): void {
+  /** Keeps memories as chips on an answer (recall, attribution, and voice's search_memory). */
+  record(chatId: string, answerId: string, memories: Memory[]): void {
     const now = Date.now()
     for (const memory of memories) {
       this.sql.exec(
@@ -290,8 +291,10 @@ export class ChatMemory {
    * After an answer: lasting facts from the person's own recent messages,
    * saved by Wren and kept with the message they came from, for Undo.
    */
-  async remember(input: RequestFrom & { chatId: string; messageId: string; own: { id: string; text: string }[] }): Promise<AutoSave[]> {
-    const saved = await this.engineFor(input.userKey, input.ip).rememberFacts(input.own, { chatId: input.chatId })
+  async remember(
+    input: RequestFrom & { chatId: string; messageId: string; own: { id: string; text: string }[]; limit?: number }
+  ): Promise<AutoSave[]> {
+    const saved = await this.engineFor(input.userKey, input.ip).rememberFacts(input.own, { chatId: input.chatId }, input.limit)
     const now = Date.now()
     return saved.map((fact) => {
       const id = crypto.randomUUID()
@@ -372,6 +375,37 @@ export class ChatMemory {
       Date.now()
     )
     return result
+  }
+
+  /**
+   * "Remember that ..." said out loud (agent/voice-memory.ts): saved as a note,
+   * as "Save to Memory" saves, and shown as "Saved to Memory · Undo" under the
+   * message it was said in. A note with the same words is the one already
+   * there, and gets no Undo, as Undo would delete it.
+   */
+  async rememberNote(
+    input: RequestFrom & { chatId: string; messageId: string | null; text: string }
+  ): Promise<MemoryResult<{ memory: Memory; save: AutoSave | null }>> {
+    const text = noteFrom(input.text)
+    if (!text) return { ok: false, code: 'bad_request' }
+    const same = findSameText(this.sql, 'note', text)
+    if (same) return { ok: true, memory: same, save: null }
+    const source = input.messageId ? { chatId: input.chatId, messageId: input.messageId } : undefined
+    const result = await this.engineFor(input.userKey, input.ip).addNote(text, source)
+    if (!result.ok) return result
+    if (!input.messageId) return { ...result, save: null }
+    const id = crypto.randomUUID()
+    this.sql.exec(
+      `INSERT INTO message_memory (id, chat_id, message_id, kind, memory_id, label, action, created_at) VALUES (?, ?, ?, 'saved', ?, ?, 'added', ?)`,
+      id,
+      input.chatId,
+      input.messageId,
+      result.memory.id,
+      result.memory.text,
+      Date.now()
+    )
+    log.info('memory.voice_saved', { count: 1 })
+    return { ok: true, memory: result.memory, save: { id, memoryId: result.memory.id, action: 'added', text: result.memory.text, undone: false } }
   }
 
   /** Marks of messages that no longer exist (a deleted chat, a regenerated answer, old messages trimmed). */

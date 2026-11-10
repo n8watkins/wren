@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { ChatMessage, ChatSummary } from '@/agent/chats'
 import type { UsageSnapshot } from '@/lib/limits'
+import type { MessageMemory } from '@/lib/memory'
 import { VoiceSession, type VoiceProblem, type VoiceStatus } from '@/lib/client/voice'
 
 /** What the listening view shows. */
@@ -17,6 +18,7 @@ export interface VoiceView {
 
 interface VoiceHandlers {
   onMessage(chat: ChatSummary, message: ChatMessage): void
+  onMarks(messageId: string, memory: MessageMemory | null): void
   onUsage(usage: UsageSnapshot): void
   onEnded(problem: VoiceProblem | null): void
 }
@@ -45,6 +47,7 @@ export function useVoice(handlers: VoiceHandlers) {
       level: setLevel,
       interim: (role, text) => setView((v) => (v ? { ...v, interim: text ? { role, text } : null } : v)),
       message: (chat, message) => latest.current.onMessage(chat, message),
+      marks: (messageId, memory) => latest.current.onMarks(messageId, memory),
       usage: (usage, secondsLeft) => {
         if (usage) latest.current.onUsage(usage)
         setView((v) => (v ? { ...v, left: secondsLeft === null ? null : { seconds: secondsLeft, at: Date.now() } } : v))

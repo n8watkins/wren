@@ -1,6 +1,7 @@
 import type { ChatMessage, ChatSummary } from '../agent/chats'
 import type { ErrorCode } from './errors'
 import type { UsageSnapshot } from './limits'
+import type { MessageMemory } from './memory'
 
 /**
  * The voice socket (GET /api/voice, worker/voice.ts to agent/voice.ts),
@@ -46,6 +47,8 @@ export type VoiceServerMessage =
   | { t: 'interim'; role: 'user' | 'model'; text: string }
   /** A turn saved to the chat (the chat is new when the session started without one). */
   | { t: 'message'; chat: ChatSummary; message: ChatMessage }
+  /** Memory's marks on a saved message changed (chips, "Saved to Memory"); null when it has none. */
+  | { t: 'marks'; messageId: string; memory: MessageMemory | null }
   /** The person talked over Wren: stop playing what is queued. */
   | { t: 'interrupted' }
   /** Today's use, after the meter moved. */

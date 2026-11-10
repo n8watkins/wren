@@ -448,9 +448,11 @@ export class MemoryEngine {
    */
   async rememberFacts(
     messages: { id: string; text: string }[],
-    source: { chatId: string | null } = { chatId: null }
+    source: { chatId: string | null } = { chatId: null },
+    /** How many of the newest messages to read (voice reads a batch of spoken turns at once). */
+    limit: number = MEMORY_LIMITS.extractorMessages
   ): Promise<SavedFact[]> {
-    const recent = messages.filter((m) => m.text.trim()).slice(-MEMORY_LIMITS.extractorMessages)
+    const recent = messages.filter((m) => m.text.trim()).slice(-limit)
     if (recent.length === 0) return []
     const known = await this.knownFor(recent.map((m) => m.text).join('\n'))
     const written = recent.map((m, i) => `Message ${i + 1}:\n${m.text.slice(0, 4_000)}`).join('\n\n')

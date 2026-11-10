@@ -42,6 +42,7 @@ import { ResearchRuns } from './research'
 import { runDetail } from './research-store'
 import { connectLive } from './gemini'
 import { WREN_VOICE_PROMPT } from './persona'
+import { VoiceMemory } from './voice-memory'
 import { TicketBook, VoiceRelay, acceptVoice, readVoiceHandoff, voiceHistory, type VoiceMeter } from './voice'
 import { voiceMinutes } from '../lib/voice'
 
@@ -467,10 +468,14 @@ export class WrenAgent extends Agent<Cloudflare.Env> {
    * with every Gemini call it makes.
    */
   private rememberFromChat(chatId: string, messageId: string, from: { userKey?: string; ip: string }): Promise<AutoSave[]> {
-    const own = listMessages(this.db, chatId)
+    return this.chatMemory.remember({ ...from, chatId, messageId, own: this.ownMessages(chatId) })
+  }
+
+  /** The person's own messages in a chat, oldest first: all the extractor may read. */
+  private ownMessages(chatId: string): { id: string; text: string; createdAt: number }[] {
+    return listMessages(this.db, chatId)
       .filter((message) => message.role === 'user')
-      .map((message) => ({ id: message.id, text: message.content }))
-    return this.chatMemory.remember({ ...from, chatId, messageId, own })
+      .map((message) => ({ id: message.id, text: message.content, createdAt: message.createdAt }))
   }
 
   /** "Save to Memory" on one of the chat's messages (yours or Wren's). */
@@ -555,12 +560,16 @@ export class WrenAgent extends Agent<Cloudflare.Env> {
         chat,
         demoKey: optionalSetting(this.env, 'GEMINI_API_KEY'),
         meter: this.voiceMeter(handoff.ip),
-        connect: (key, events) =>
+        // Memory on the session's key and the ticket's network, counted like chat's (agent/voice-memory.ts).
+        memory: (userKey) =>
+          new VoiceMemory(this.chatMemory, (key, ip) => this.memory(key, ip), { userKey, ip: handoff.ip }, (chatId) => this.ownMessages(chatId)),
+        connect: (key, events, memory) =>
           connectLive(
             {
               ...key,
               model: this.env.GEMINI_LIVE_MODEL,
-              systemPrompt: WREN_VOICE_PROMPT,
+              systemPrompt: memory.context ? `${WREN_VOICE_PROMPT}\n\n${memory.context}` : WREN_VOICE_PROMPT,
+              tools: memory.tools,
               history,
               setupMs: VOICE_LIMITS.setupMs,
               baseUrl: optionalSetting(this.env, 'GEMINI_BASE_URL'),

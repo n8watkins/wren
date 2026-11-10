@@ -1,10 +1,11 @@
 import { z } from 'zod'
 import type { ChatMessage, ChatSummary, MessageStatus, Role } from './chats'
-import { GeminiError, type KeySource, type LiveEvents, type LiveSession } from './gemini'
+import { GeminiError, type KeySource, type LiveEvents, type LiveSession, type LiveTool, type LiveToolCall } from './gemini'
 import { chooseKey } from './keys'
 import type { ErrorCode } from '../lib/errors'
 import { SIZE_LIMITS, VOICE_LIMITS, type UsageSnapshot } from '../lib/limits'
 import { log } from '../lib/log'
+import type { MessageMemory } from '../lib/memory'
 import type { VoiceClientMessage, VoiceEndReason, VoiceServerMessage, VoiceState } from '../lib/voice'
 
 /**
@@ -33,12 +34,42 @@ export interface VoiceMeter {
   usage(): UsageSnapshot
 }
 
+/**
+ * The person's Memory in a session (agent/voice-memory.ts): what goes in the
+ * setup, the tools Wren may call, and the work after each answer.
+ */
+export interface VoiceMemoryPort {
+  /** Wren's facts about the person, for the system instruction (read once, at the start). */
+  context(): string
+  tools: LiveTool[]
+  /** search_memory's output. May throw; the relay turns that into an error for the model. */
+  search(query: string): Promise<unknown>
+  /** save_to_memory: its output, and the message that now shows "Saved to Memory", if any. */
+  save(text: string, at: { chatId: string; messageId: string | null } | null): Promise<{ output: unknown; marked?: string }>
+  /** Keeps what search_memory found this turn as chips on the answer (none saved: dropped). True when it kept any. */
+  recordFound(chatId: string, answerId: string | null): boolean
+  /**
+   * After a finished answer: the facts it used (when they could have mattered), and with `remember`,
+   * Wren's saves from the spoken turns since the last batch. The messages whose marks changed.
+   */
+  afterAnswer(turn: { chatId: string; user: ChatMessage | null; answer: ChatMessage; searched: boolean; remember: boolean }): Promise<string[]>
+  /** Wren's saves from the turns not read yet, shown under `messageId` (each batch, and once at the end). */
+  rememberBatch(chatId: string, messageId: string): Promise<string[]>
+  marks(chatId: string, messageId: string): MessageMemory | null
+}
+
 export interface VoiceDeps {
   client: VoiceClient
   demoKey: string | undefined
   meter: VoiceMeter
-  /** Opens Gemini Live with this key (agent/gemini.ts connectLive). */
-  connect(key: { apiKey: string; keySource: KeySource }, events: LiveEvents): Promise<LiveSession>
+  /** Opens Gemini Live with this key (agent/gemini.ts connectLive), with Memory's context and tools. */
+  connect(
+    key: { apiKey: string; keySource: KeySource },
+    events: LiveEvents,
+    memory: { context: string; tools: LiveTool[] }
+  ): Promise<LiveSession>
+  /** The person's Memory for this session, on the key it runs on. */
+  memory?(userKey: string | undefined): VoiceMemoryPort
   /** Saves a turn to the chat, starting the chat with the first one. */
   save(role: Role, text: string, status: MessageStatus): { chat: ChatSummary; message: ChatMessage }
   /** The chat the session is in, if it already exists. */
@@ -76,6 +107,18 @@ export class VoiceRelay {
   private modelText = ''
   private modelTalking = false
   private state: VoiceState = 'connecting'
+  private memory?: VoiceMemoryPort
+  /** The person's newest message in the chat (said or typed): where a save shows, what an answer answers. */
+  private lastUser: ChatMessage | null = null
+  /** Memory tool calls in the turn being answered, and whether one searched. */
+  private toolCalls = 0
+  private searched = false
+  /** Finished answers so far: every VOICE_LIMITS.rememberEveryTurns of them, Wren's automatic save runs. */
+  private finishedAnswers = 0
+  /** Tool calls Gemini cancelled: their results are not sent. */
+  private readonly cancelled = new Set<string>()
+  /** Memory work after answers, one at a time. */
+  private afterWork = Promise.resolve()
 
   constructor(private readonly deps: VoiceDeps) {
     // A browser that never sends `start`, or goes quiet, is gone.
@@ -134,8 +177,17 @@ export class VoiceRelay {
     }
     // The browser left while the meter was being read.
     if (this.phase !== 'connecting') return this.refund()
+    let memory: { context: string; tools: LiveTool[] } = { context: '', tools: [] }
     try {
-      this.upstream = await this.deps.connect(key, this.events())
+      this.memory = this.deps.memory?.(userKey)
+      if (this.memory) memory = { context: this.memory.context(), tools: this.memory.tools }
+    } catch {
+      // Voice works without Memory.
+      this.memory = undefined
+      log.warn('voice.memory_unavailable', { code: 'context' })
+    }
+    try {
+      this.upstream = await this.deps.connect(key, this.events(), memory)
     } catch (error) {
       await this.refund()
       log.warn('voice.connect_failed', { code: error instanceof GeminiError ? error.code : 'unknown', keySource: key.keySource })
@@ -174,14 +226,24 @@ export class VoiceRelay {
         this.send({ t: 'interim', role: 'model', text: this.modelText.trim() })
       },
       interrupted: () => {
-        this.saveModelTurn('stopped')
+        this.answered(this.saveModelTurn('stopped'), false)
         this.send({ t: 'interrupted' })
         this.setState('listening')
       },
       turnComplete: () => {
         this.saveUserTurn()
-        this.saveModelTurn('done')
+        this.answered(this.saveModelTurn('done'), true)
         this.setState('listening')
+      },
+      toolCall: (calls) => {
+        this.lastActivity = Date.now()
+        // What the person said so far is the message a save belongs to.
+        this.saveUserTurn()
+        this.setState('thinking')
+        for (const call of calls) void this.runTool(call)
+      },
+      toolCancelled: (ids) => {
+        for (const id of ids) this.cancelled.add(id)
       },
       // Gemini ends a connection after about 10 minutes; sessions stop before then.
       goAway: () => void this.end('session_limit'),
@@ -207,17 +269,102 @@ export class VoiceRelay {
     if (text) this.save('user', text, 'done')
   }
 
-  private saveModelTurn(status: MessageStatus) {
+  private saveModelTurn(status: MessageStatus): ChatMessage | null {
     const text = this.modelText.trim()
     this.modelText = ''
     this.modelTalking = false
-    if (text) this.save('model', text, status)
+    return text ? this.save('model', text, status) : null
   }
 
-  private save(role: Role, text: string, status: MessageStatus) {
+  private save(role: Role, text: string, status: MessageStatus): ChatMessage {
     const saved = this.deps.save(role, text.slice(0, SIZE_LIMITS.messageChars), status)
     this.deps.chat = saved.chat
+    if (role === 'user') this.lastUser = saved.message
     this.send({ t: 'message', chat: saved.chat, message: saved.message })
+    return saved.message
+  }
+
+  /*
+   * Memory during a session: Wren's tool calls, answered within
+   * VOICE_LIMITS.memoryToolMs (the model waits in silence meanwhile), and the
+   * same work after an answer as typed chat does, which runs in the background
+   * and sends the marks when they're known.
+   */
+
+  private async runTool(call: LiveToolCall): Promise<void> {
+    const respond = (response: { output: unknown } | { error: string }) => {
+      if (this.cancelled.delete(call.id) || this.phase !== 'live') return
+      this.upstream?.sendToolResponse({ id: call.id, name: call.name, response })
+    }
+    const memory = this.memory
+    if (!memory) return respond({ error: 'Memory is not available in this conversation.' })
+    if (++this.toolCalls > VOICE_LIMITS.memoryToolsPerTurn) return respond({ error: 'That is enough memory lookups for one answer; answer with what you have.' })
+    const started = Date.now()
+    let timer: ReturnType<typeof setTimeout> | undefined
+    const timeout = new Promise<never>((_, reject) => (timer = setTimeout(() => reject(new Error('timeout')), VOICE_LIMITS.memoryToolMs)))
+    const work = this.callTool(memory, call)
+    try {
+      const result = await Promise.race([work, timeout])
+      log.info('voice.memory_tool', { code: call.name, ms: Date.now() - started })
+      respond({ output: result.output })
+      if (result.marked) this.sendMarks(memory, result.marked)
+    } catch (error) {
+      const timedOut = error instanceof Error && error.message === 'timeout'
+      log.warn('voice.memory_tool_failed', { code: `${call.name}:${timedOut ? 'timeout' : 'failed'}`, ms: Date.now() - started })
+      if (call.name !== 'save_to_memory') return respond({ error: 'Memory could not be searched just now. Say so briefly and answer without it.' })
+      if (!timedOut) return respond({ error: 'Memory could not save that just now. Say so briefly; they can use Save to Memory on the message instead.' })
+      // A slow save still lands: its line shows in the chat when it does.
+      void work.then((late) => late.marked && this.sendMarks(memory, late.marked)).catch(() => undefined)
+      respond({ error: 'Saving is taking longer than usual. Say briefly that it should show in the chat in a moment.' })
+    } finally {
+      clearTimeout(timer)
+    }
+  }
+
+  private async callTool(memory: VoiceMemoryPort, call: LiveToolCall): Promise<{ output: unknown; marked?: string }> {
+    const arg = (name: string) => (typeof call.args[name] === 'string' ? (call.args[name] as string).trim() : '')
+    if (call.name === 'search_memory') {
+      const query = arg('query').slice(0, SIZE_LIMITS.messageChars)
+      if (!query) throw new Error('bad_request')
+      this.searched = true
+      return { output: await memory.search(query) }
+    }
+    if (call.name === 'save_to_memory') {
+      const text = arg('text')
+      if (!text) throw new Error('bad_request')
+      const chat = this.deps.chat
+      return memory.save(text, chat ? { chatId: chat.id, messageId: this.lastUser?.id ?? null } : null)
+    }
+    throw new Error('unknown_tool')
+  }
+
+  /** An answer was saved (or wasn't): its chips, then, if it finished, the work after it. */
+  private answered(answer: ChatMessage | null, done: boolean) {
+    const searched = this.searched
+    this.toolCalls = 0
+    this.searched = false
+    const memory = this.memory
+    const chat = this.deps.chat
+    if (!memory || !chat) return
+    if (memory.recordFound(chat.id, answer?.id ?? null) && answer) this.sendMarks(memory, answer.id)
+    if (!done || !answer) return
+    const user = this.lastUser
+    const remember = ++this.finishedAnswers % VOICE_LIMITS.rememberEveryTurns === 0
+    this.afterMemory(memory, () => memory.afterAnswer({ chatId: chat.id, user, answer, searched, remember }))
+  }
+
+  /** Memory work after answers, one at a time; it carries on after the session ends (the agent runs it, not the browser). */
+  private afterMemory(memory: VoiceMemoryPort, work: () => Promise<string[]>) {
+    this.afterWork = this.afterWork
+      .then(async () => {
+        for (const id of await work()) this.sendMarks(memory, id)
+      })
+      .catch(() => log.warn('voice.memory_after_failed', { code: 'internal' }))
+  }
+
+  private sendMarks(memory: VoiceMemoryPort, messageId: string) {
+    const chat = this.deps.chat
+    if (chat) this.send({ t: 'marks', messageId, memory: memory.marks(chat.id, messageId) })
   }
 
   private setState(state: VoiceState) {
@@ -296,7 +443,12 @@ export class VoiceRelay {
     this.upstream?.close()
     if (wasLive) {
       this.saveUserTurn()
-      this.saveModelTurn('stopped')
+      this.answered(this.saveModelTurn('stopped'), false)
+      // The last batch of Wren's automatic save: whatever was said since the previous one.
+      const memory = this.memory
+      const chat = this.deps.chat
+      const user = this.lastUser
+      if (memory && chat && user) this.afterMemory(memory, () => memory.rememberBatch(chat.id, user.id))
     }
     const used = this.usedSeconds()
     if (!options.quiet) this.send({ t: 'end', reason })

@@ -25,7 +25,7 @@ function harness(options: { usedToday?: number; networkLeft?: number; connectErr
     }),
     close: vi.fn(),
   }
-  const upstream = { sendAudio: vi.fn(), sendText: vi.fn(), close: vi.fn() }
+  const upstream = { sendAudio: vi.fn(), sendText: vi.fn(), sendToolResponse: vi.fn(), close: vi.fn() }
   let events: LiveEvents | undefined
   let connectedWith: KeySource | undefined
   let release: (() => void) | undefined

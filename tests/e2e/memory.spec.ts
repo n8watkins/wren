@@ -56,7 +56,8 @@ test('add a note, a link and a file, find them by words and meaning, edit and de
   await expect(memory.getByTestId('memory-item')).toContainText('Heat pump sizing')
   await expect(memory.getByText('Related by meaning')).toBeVisible()
   await search.fill('nothing like this anywhere')
-  await expect(memory.getByTestId('memory-none')).toContainText('Nothing matches')
+  // A search by meaning goes to the server after a pause in typing; under a full parallel run it can take over 5 s.
+  await expect(memory.getByTestId('memory-none')).toContainText('Nothing matches', { timeout: 15_000 })
   await search.fill('')
   await noHorizontalScroll(page)
 
