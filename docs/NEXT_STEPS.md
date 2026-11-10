@@ -16,14 +16,13 @@ Settled: sign-in emails come from `wren@n8builds.dev`, and Wren lives at `wren.n
 
 ## Agents
 
-- Phase 2, memory in chat: recall the most relevant memories before answering, with "From your Memory" chips; call `rememberFromChat` after an answer and show "Saved to Memory · Undo"; a "Save to Memory" button on messages.
-  Tune `MEANING_MIN_SCORE` and `DUPLICATE_SCORE` in `agent/memory.ts` against real gemini-embedding-2 searches (they were set without a live run).
-- Phase 3, research in chat: a "Research this" action in the composer, the run as a progress card in the chat, the report landing in the chat, and "Save findings to Memory". The engine and the Runs page are done.
+- Phase 3, research in chat (next): a "Research this" action in the composer, the run as a progress card in the chat, the report landing in the chat, and "Save findings to Memory". The engine and the Runs page are done.
 - Phase 4, voice: Gemini Live through the person's agent (WebSocket relay), metered by the minute; chat moves onto the agent's WebSocket with resumable streams.
 - Launch: portfolio card, build page on n8builds.dev, OpenPing watching `/api/health`.
 
 ## Done
 
+- 2026-11-10: memory in chat (phase 2): Wren's facts with every message and recall by meaning, "From your Memory" chips, "Saved to Memory" with Undo, "Save to Memory" on messages, and meaning thresholds tuned on real gemini-embedding-2 searches.
 - 2026-11-09: research engine and the Runs page (phase 3, lane B): runs in each person's agent, Tavily with Gemini Google Search as backup, safe fetching, cited reports.
 - 2026-11-09: release-kit and CI checks (#1); phase 1, foundation and chat (#4).
 - 2026-11-09: memory engine and the Memory page (lane A of phases 2 and 3): storage in each person's agent, search by meaning (Vectorize index and R2 bucket `wren-memory` created), files, the fact extractor (not yet called from chat), and the page.
