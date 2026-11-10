@@ -133,10 +133,12 @@ function parseSources(json: string | null): RunSource[] {
   }
 }
 
+/** Messages saved before Tavily was the only search may also count Google searches; only Tavily's count is kept. */
 function parseSearched(json: string | null): SearchedWith | null {
   if (!json) return null
   try {
-    return JSON.parse(json) as SearchedWith
+    const tavily = (JSON.parse(json) as { tavily?: unknown }).tavily
+    return typeof tavily === 'number' && tavily > 0 ? { tavily } : null
   } catch {
     return null
   }

@@ -1,11 +1,12 @@
 import type { Sql } from './sql'
-import { GeminiError, generateText, searchWithGoogle, type GeneratePart } from './gemini'
+import { GeminiError, generateText, type GeneratePart } from './gemini'
 import { giveBack, tryTake } from './meter'
 import {
   activeRuns,
   addFoundPage,
   addStep,
   alreadyRead,
+  answeredSearches,
   compactRun,
   createResearchTables,
   createRun,
@@ -34,19 +35,21 @@ import {
   samePageKey,
   titleFor,
 } from './research-text'
-import { searchWeb, type WebSearch } from './web-search'
+import { SearchError, searchWeb, type SearchResult } from './web-search'
 import type { ErrorCode } from '../lib/errors'
 import { DAILY_LIMITS, RESEARCH_LIMITS, utcDay } from '../lib/limits'
 import { log } from '../lib/log'
-import { RUN_FAILURES, isActive, providerName, type RunDetail, type RunFailure, type RunStreamEvent, type RunSummary } from '../lib/research'
+import { RUN_FAILURES, isActive, type RunDetail, type RunFailure, type RunStreamEvent, type RunSummary } from '../lib/research'
 import { optionalSetting } from '../lib/secrets'
 import { SKIP_REASONS, checkUrl, fetchPage, type PageResult } from '../lib/web/fetch-page'
 import { tidy } from '../lib/web/page-text'
 
 /**
  * Research runs, inside the person's own agent: plan 3 to 5 searches, search
- * (Tavily, or Gemini's Google Search as the backup), read up to 8 pages, then
- * write a report where every [n] is a page that was read.
+ * with Tavily, read up to 8 pages, then write a report where every [n] is a
+ * page that was read. Tavily is the only search: when it is out of credits or
+ * rejects the key the run stops and says so, and when every search failed the
+ * run stops as "Tavily isn't answering" (owner, 2026-11-10).
  *
  * A run is a small state machine saved in SQLite (agent/research-store.ts).
  * Each step is one scheduled callback (WrenAgent.researchTick) that does one
@@ -63,7 +66,8 @@ import { tidy } from '../lib/web/page-text'
 
 export interface ResearchDeps {
   generate(request: { systemPrompt: string; parts: GeneratePart[]; json?: boolean }): Promise<string>
-  search(query: string): Promise<WebSearch>
+  /** Throws SearchError when the search service can't search. */
+  search(query: string): Promise<SearchResult[]>
   fetchPage(url: string): Promise<PageResult>
   /** Aborted when the run is cancelled. */
   signal: AbortSignal
@@ -101,16 +105,15 @@ export function cancelRun(sql: Sql, id: string): boolean {
 }
 
 function failureOf(error: unknown): RunFailure {
+  if (error instanceof SearchError) return error.reason === 'out_of_credits' ? 'search_out_of_credits' : 'search_unavailable'
   if (!(error instanceof GeminiError)) return 'internal'
   if (error.code === 'demo_busy') return 'model_busy'
   if (error.code === 'demo_unavailable') return 'model_unavailable'
   return 'model_error'
 }
 
-function resultsLine(search: WebSearch): string {
-  const count = search.results.length
-  const what = count === 1 ? '1 result' : `${count} results`
-  return `${what} from ${providerName(search.provider, search.backupReason ?? null)}`
+function resultsLine(results: SearchResult[]): string {
+  return `${results.length === 1 ? '1 result' : `${results.length} results`} from Tavily`
 }
 
 /** Page text the search sent is used when there is enough of it; otherwise the page is fetched. */
@@ -178,23 +181,22 @@ export async function advanceRun(sql: Sql, runId: string, deps: ResearchDeps, no
 
     if (run.status === 'searching') {
       const query = run.queries[run.cursor]
-      let search: WebSearch | null = null
+      let results: SearchResult[] | null = null
       if (query !== undefined) {
         try {
-          search = await deps.search(query)
+          results = await deps.search(query)
         } catch (error) {
           if (deps.signal.aborted) throw error
+          // No credits, no key or a rejected key: the other searches would fail the same way.
+          if (error instanceof SearchError && error.reason !== 'error') {
+            if (!unchanged()) return false
+            throw error
+          }
         }
         if (!unchanged()) return false
-        if (search) {
-          addStep(sql, runId, {
-            kind: 'search',
-            label: query,
-            detail: resultsLine(search),
-            provider: search.provider,
-            backupReason: search.backupReason ?? null,
-          })
-          search.results.forEach((result, position) => {
+        if (results) {
+          addStep(sql, runId, { kind: 'search', label: query, detail: resultsLine(results), provider: 'tavily' })
+          results.forEach((result, position) => {
             const checked = checkUrl(result.url)
             if (!checked.ok) {
               // Said once per run, however many searches return it.
@@ -212,7 +214,7 @@ export async function advanceRun(sql: Sql, runId: string, deps: ResearchDeps, no
             })
           })
         } else {
-          addStep(sql, runId, { kind: 'search', label: query, detail: 'The search failed; carrying on with the others.' })
+          addStep(sql, runId, { kind: 'search', label: query, detail: 'Tavily didn’t answer this search; carrying on with the others.' })
         }
       }
       const cursor = run.cursor + 1
@@ -221,7 +223,7 @@ export async function advanceRun(sql: Sql, runId: string, deps: ResearchDeps, no
         return true
       }
       if (pageCounts(sql, runId).found === 0) {
-        fail(sql, { ...run, cursor }, 'no_results')
+        fail(sql, { ...run, cursor }, answeredSearches(sql, runId) === 0 ? 'search_unavailable' : 'no_results')
         return false
       }
       updateRun(sql, runId, { status: 'reading', cursor })
@@ -321,7 +323,8 @@ export class ResearchRuns {
   }
 
   async start(question: string): Promise<StartResult> {
-    if (!optionalSetting(this.env, 'GEMINI_API_KEY')) return { ok: false, code: 'research_unavailable' }
+    // Research needs the demo key for the model and Tavily for the searches.
+    if (!optionalSetting(this.env, 'GEMINI_API_KEY') || !optionalSetting(this.env, 'TAVILY_API_KEY')) return { ok: false, code: 'research_unavailable' }
     const started = startRun(this.sql, question)
     if (!started.ok) return started
     try {
@@ -447,7 +450,6 @@ export class ResearchRuns {
           tavilyKey: optionalSetting(env, 'TAVILY_API_KEY'),
           tavilyBaseUrl: optionalSetting(env, 'TAVILY_BASE_URL'),
           signal,
-          backup: (q) => searchWithGoogle({ ...gemini, query: q }),
         }),
       fetchPage: (url) => fetchPage(url, { signal }),
     }

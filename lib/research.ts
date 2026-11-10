@@ -24,11 +24,22 @@ export const RUN_STATUS_LABELS: Record<RunStatus, string> = {
 }
 
 /** Why a run ended without a report. The person's daily run is given back for all of them. */
-export type RunFailure = 'no_results' | 'no_sources' | 'model_busy' | 'model_unavailable' | 'model_error' | 'stalled' | 'internal'
+export type RunFailure =
+  | 'no_results'
+  | 'no_sources'
+  | 'search_out_of_credits'
+  | 'search_unavailable'
+  | 'model_busy'
+  | 'model_unavailable'
+  | 'model_error'
+  | 'stalled'
+  | 'internal'
 
 export const RUN_FAILURES: Record<RunFailure, string> = {
   no_results: 'None of the searches found anything to read.',
   no_sources: 'None of the pages it found could be read.',
+  search_out_of_credits: 'Tavily, the web search research uses, is out of credits right now.',
+  search_unavailable: 'Tavily, the web search research uses, isn’t answering right now.',
   model_busy: 'Gemini is busy right now.',
   model_unavailable: 'Gemini isn’t available right now.',
   model_error: 'Gemini didn’t answer.',
@@ -46,44 +57,17 @@ export function isRunFailure(value: unknown): value is RunFailure {
  */
 export type StepKind = 'plan' | 'search' | 'read' | 'skip' | 'note' | 'write' | 'error'
 
-/** Which service answered a search: Tavily, or Gemini's Google Search as the backup. */
-export type SearchProvider = 'tavily' | 'google'
+/** Which service answered a search. Tavily is research's only search (owner, 2026-11-10). */
+export type SearchProvider = 'tavily'
 
-/** Why a search went to the backup. */
-export type BackupReason = 'no_key' | 'out_of_credits' | 'rejected' | 'error'
-
-const BACKUP_REASONS: Record<BackupReason, string> = {
-  no_key: '',
-  out_of_credits: 'Tavily is out of credits',
-  rejected: 'Tavily rejected the key',
-  error: 'Tavily didn’t answer',
-}
-
-export function isBackupReason(value: unknown): value is BackupReason {
-  return typeof value === 'string' && Object.hasOwn(BACKUP_REASONS, value)
-}
-
-/** The search service in words, with why the backup answered: "Google Search (Tavily is out of credits)". */
-export function providerName(provider: SearchProvider, reason: BackupReason | null): string {
-  if (provider === 'tavily') return 'Tavily'
-  const why = reason ? BACKUP_REASONS[reason] : ''
-  return why ? `Google Search (${why})` : 'Google Search'
-}
-
-/** How a run's searches went: how many each service answered, and why the backup took over. */
+/** How a run's searches went: how many Tavily answered. */
 export interface SearchedWith {
   tavily: number
-  google: number
-  /** The latest reason the backup answered, if it did. */
-  backupReason: BackupReason | null
 }
 
-/** One line saying which service searched: "Searched with Tavily", or the backup and why. */
+/** One line saying which service searched: "Searched with Tavily". */
 export function searchedWithLine(searched: SearchedWith | null): string | null {
-  if (!searched || searched.tavily + searched.google === 0) return null
-  if (searched.google === 0) return 'Searched with Tavily'
-  const backup = providerName('google', searched.backupReason)
-  return searched.tavily === 0 ? `Searched with ${backup}` : `Searched with Tavily, then ${backup}`
+  return searched && searched.tavily > 0 ? 'Searched with Tavily' : null
 }
 
 export interface RunStep {

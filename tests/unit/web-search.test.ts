@@ -1,5 +1,5 @@
-import { describe, expect, it, vi } from 'vitest'
-import { searchWeb, tavilySearch } from '../../agent/web-search'
+import { describe, expect, it } from 'vitest'
+import { SearchError, searchWeb, tavilySearch } from '../../agent/web-search'
 
 function tavily(status: number, body: unknown = {}) {
   const calls: { url: string; init: RequestInit }[] = []
@@ -34,21 +34,15 @@ describe('Tavily', () => {
   })
 })
 
-describe('switching to the backup', () => {
-  const backupResults = [{ url: 'https://g.example.org/', title: 'From Google' }]
-
-  it('uses Tavily when it answers', async () => {
-    const backup = vi.fn(async () => backupResults)
-    const search = await searchWeb('q', { tavilyKey: 'k', fetchImpl: tavily(200, RESULTS).fetchImpl, backup })
-    expect(search.provider).toBe('tavily')
-    expect(search.results).toHaveLength(2)
-    expect(backup).not.toHaveBeenCalled()
+describe('searching', () => {
+  it('returns Tavily’s results', async () => {
+    const results = await searchWeb('q', { tavilyKey: 'k', fetchImpl: tavily(200, RESULTS).fetchImpl })
+    expect(results.map((r) => r.url)).toEqual(['https://a.example.org/1', 'https://b.example.org/2'])
   })
 
-  it('uses the backup when there is no Tavily key, without calling Tavily', async () => {
+  it('fails as no_key without a Tavily key, without calling anything', async () => {
     const { fetchImpl, calls } = tavily(200, RESULTS)
-    const search = await searchWeb('q', { fetchImpl, backup: async () => backupResults })
-    expect(search).toEqual({ provider: 'google', results: backupResults, backupReason: 'no_key' })
+    await expect(searchWeb('q', { fetchImpl })).rejects.toEqual(new SearchError('no_key'))
     expect(calls).toHaveLength(0)
   })
 
@@ -57,44 +51,31 @@ describe('switching to the backup', () => {
     [433, 'out_of_credits'],
     [429, 'out_of_credits'],
     [401, 'rejected'],
+    [403, 'rejected'],
     [500, 'error'],
     [502, 'error'],
-  ])('uses the backup when Tavily answers %i', async (status, reason) => {
-    const search = await searchWeb('q', { tavilyKey: 'k', fetchImpl: tavily(status).fetchImpl, backup: async () => backupResults })
-    expect(search).toEqual({ provider: 'google', results: backupResults, backupReason: reason })
+  ] as const)('fails with the reason when Tavily answers %i', async (status, reason) => {
+    await expect(searchWeb('q', { tavilyKey: 'k', fetchImpl: tavily(status).fetchImpl })).rejects.toMatchObject({ name: 'SearchError', reason })
   })
 
-  it('uses the backup when Tavily cannot be reached or sends nonsense', async () => {
+  it('fails as error when Tavily cannot be reached or sends nonsense', async () => {
     const down = (async () => {
       throw new TypeError('fetch failed')
     }) as typeof fetch
     const garbage = (async () => new Response('<html>', { status: 200 })) as typeof fetch
     for (const fetchImpl of [down, garbage]) {
-      const search = await searchWeb('q', { tavilyKey: 'k', fetchImpl, backup: async () => backupResults })
-      expect(search).toMatchObject({ provider: 'google', backupReason: 'error' })
+      await expect(searchWeb('q', { tavilyKey: 'k', fetchImpl })).rejects.toMatchObject({ name: 'SearchError', reason: 'error' })
     }
   })
 
-  it('passes the backup’s own failure on', async () => {
-    await expect(
-      searchWeb('q', {
-        fetchImpl: tavily(432).fetchImpl,
-        tavilyKey: 'k',
-        backup: async () => {
-          throw new Error('google down')
-        },
-      })
-    ).rejects.toThrow('google down')
-  })
-
-  it('does not switch to the backup when the run was cancelled', async () => {
+  it('passes a cancel on as it is, not as a search failure', async () => {
     const controller = new AbortController()
     controller.abort()
+    const abort = new DOMException('aborted', 'AbortError')
     const fetchImpl = (async () => {
-      throw new DOMException('aborted', 'AbortError')
+      throw abort
     }) as typeof fetch
-    const backup = vi.fn(async () => backupResults)
-    await expect(searchWeb('q', { tavilyKey: 'k', fetchImpl, signal: controller.signal, backup })).rejects.toBeDefined()
-    expect(backup).not.toHaveBeenCalled()
+    const failure = await searchWeb('q', { tavilyKey: 'k', fetchImpl, signal: controller.signal }).catch((error: unknown) => error)
+    expect(failure).not.toBeInstanceOf(SearchError)
   })
 })

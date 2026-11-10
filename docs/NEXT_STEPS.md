@@ -10,7 +10,7 @@
    Make a second app for local runs (callback `http://localhost:3120/api/auth/callback/github`) if you want GitHub sign-in there.
 3. **Review**, then say go for phase 2 (memory).
 4. **Tavily key** for research, before its live check: `pass-env set wren/TAVILY_API_KEY` in your own terminal, then `pass-env pipe wren/TAVILY_API_KEY -- npx wrangler secret put TAVILY_API_KEY`.
-   Until then research searches with Gemini's Google Search, which needs the Gemini demo key.
+   Until then research is off: Tavily is its only search (owner, 2026-11-10).
 
 Settled: sign-in emails come from `wren@n8builds.dev`, and Wren lives at `wren.n8builds.dev` (2026-11-09).
 
@@ -19,16 +19,16 @@ Settled: sign-in emails come from `wren@n8builds.dev`, and Wren lives at `wren.n
 - Typed chat onto the agent's WebSocket, with resumable streams (split out of phase 4 on 2026-11-10; voice already has its own socket).
 - Voice, once live: check a real session on wren.n8builds.dev (the mic needs https), and watch Gemini Live's per-minute cost against the 10-minute allowance.
 - Launch (next): portfolio card, build page on n8builds.dev, OpenPing watching `/api/health` with a JSON assertion that `status` is `"ok"` (a failed daily model check is `degraded` with HTTP 200, not a 503).
-- Research's Google Search grounding backup is being removed by owner decision (2026-11-10): Tavily is Wren's only search and the model gets no Google Search tool.
-  The coordinator removes it from the research engine (`agent/research.ts`, `agent/web-search.ts`, `searchWithGoogle` in `agent/gemini.ts`) in its own PR; the daily model check already doesn't call it.
 - After the daily model check's first deploy: the next day, check that `/api/health` shows `models` with a `ranAt` from 14:00 UTC.
 - What the first real runs of the daily model check found (2026-11-10, local, on the demo key):
   Google Search grounding answered 429 (`demo_busy`) on both `gemini-3.5-flash-lite` and `gemini-3.1-flash-lite`, every time, while plain calls to the same models worked.
-  The lite models are slow and flaky: a one-word reply took 2 to 9 s from `gemini-3.5-flash-lite` (one 503 after 15 s) and 1 to 20 s from `gemini-3.1-flash-lite` (one 20 s timeout, one 503 on both tries), against chat's 20 s first-text window.
+  The lite models are slow and flaky: a one-word reply took 2 to 9 s from `gemini-3.5-flash-lite` (one 503 after 15 s) and 1 to 20 s from `gemini-3.1-flash-lite` (one 20 s timeout, one 503 on both tries), against chat's 20 s first-text window (since 2026-11-10: 10 s for the first model before the backup, 20 s for the backup).
   `gemini-embedding-2` (768 values), `gemini-3.8-live` (setup in under 0.6 s) and Tavily answered every time.
 
 ## Done
 
+- 2026-11-10: chat switches to the backup model after 10 s without text from the first model (was 20 s).
+- 2026-11-10: Tavily is research's only search: the Gemini Google Search backup is removed, and a run that can't search says why and doesn't count.
 - 2026-11-10: research in chat (phase 3): Research mode in the composer and "Research this" on answers, the run as a live saffron card with Stop that reattaches after a reload, the report and its sources landing in the chat as part of the conversation, "Save findings to memory", and which service searched.
 - 2026-11-10: daily real-model check (lane E): a Cron Trigger calls each model and search service once a day and `/api/health` reports the result, so OpenPing alerts when a model stops answering without spending model calls.
 - 2026-11-10: memory in chat (phase 2): Wren's facts with every message and recall by meaning, "From your Memory" chips, "Saved to Memory" with Undo, "Save to Memory" on messages, and meaning thresholds tuned on real gemini-embedding-2 searches.
@@ -44,5 +44,5 @@ Checked 2026-11-09 against the secret names on the Worker and in GitHub Actions 
 New values go into the owner's pass-env store and are sent with `pass-env pipe <entry> -- <command>`; never commit or paste a value.
 
 - [ ] `GEMINI_API_KEY` (missing): guests cannot chat until it is a Worker secret. Make a Wren-only key in Google AI Studio, then `pass-env pipe wren/GEMINI_API_KEY -- npx wrangler secret put GEMINI_API_KEY`.
-- [ ] `TAVILY_API_KEY` (missing, optional): research searches with Gemini's Google Search until it is set; see Owner step 4.
+- [ ] `TAVILY_API_KEY` (missing): research is off until it is set, as Tavily is its only search; see Owner step 4.
 - [x] `BETTER_AUTH_SECRET`, `TURNSTILE_SECRET_KEY`: set on the Worker.

@@ -189,17 +189,34 @@ describe('which service searched', () => {
     const sql = store()
     const run = createRun(sql, 'q', '2026-11-10')
     addStep(sql, run.id, { kind: 'search', label: 'a', detail: '5 results from Tavily', provider: 'tavily' })
-    addStep(sql, run.id, { kind: 'search', label: 'b', detail: '2 results from Google Search', provider: 'google', backupReason: 'out_of_credits' })
+    addStep(sql, run.id, { kind: 'search', label: 'b', detail: '4 results from Tavily', provider: 'tavily' })
     const detail = runDetail(sql, run.id)
-    expect(detail?.searchedWith).toEqual({ tavily: 1, google: 1, backupReason: 'out_of_credits' })
-    expect(detail?.steps.map((s) => s.provider)).toEqual(['tavily', 'google'])
-    expect(searchedWithLine(detail?.searchedWith ?? null)).toBe('Searched with Tavily, then Google Search (Tavily is out of credits)')
-    expect(searchedWithLine({ tavily: 0, google: 3, backupReason: 'error' })).toBe('Searched with Google Search (Tavily didn’t answer)')
-    expect(searchedWithLine({ tavily: 0, google: 3, backupReason: 'no_key' })).toBe('Searched with Google Search')
+    expect(detail?.searchedWith).toEqual({ tavily: 2 })
+    expect(detail?.steps.map((s) => s.provider)).toEqual(['tavily', 'tavily'])
+    expect(searchedWithLine(detail?.searchedWith ?? null)).toBe('Searched with Tavily')
+    expect(searchedWithLine({ tavily: 0 })).toBeNull()
     expect(searchedWithLine(null)).toBeNull()
   })
 
-  it('adds its columns to a database from before they existed', () => {
+  it('counts only Tavily in runs and messages saved when Google Search was the backup', () => {
+    const sql = store()
+    const run = createRun(sql, 'q', '2026-11-10')
+    sql.exec("INSERT INTO research_steps (run_id, kind, label, detail, provider, created_at) VALUES (?, 'search', 'old', '2 results from Google Search', 'google', 0)", run.id)
+    expect(runDetail(sql, run.id)).toMatchObject({ searchedWith: null, steps: [{ provider: null, detail: '2 results from Google Search' }] })
+
+    const { chat, card, run: chatRun } = started(sql)
+    finishRun(sql, chatRun.id, 'Report [1].')
+    settleRun(sql, chatRun.id, runDetail(sql, chatRun.id))
+    const saved = (json: string) => {
+      sql.exec('UPDATE chat_research SET searched_with = ? WHERE message_id = ?', json, card.id)
+      return researchMarks(sql, chat.id, () => null).cards.get(card.id)?.searchedWith
+    }
+    expect(saved(JSON.stringify({ tavily: 0, google: 3, backupReason: 'out_of_credits' }))).toBeNull()
+    expect(saved(JSON.stringify({ tavily: 2, google: 1, backupReason: 'error' }))).toEqual({ tavily: 2 })
+    expect(saved('not json')).toBeNull()
+  })
+
+  it('adds its column to a database from before it existed', () => {
     const sql = memorySql()
     sql.exec(`CREATE TABLE research_steps (
       seq INTEGER PRIMARY KEY AUTOINCREMENT, run_id TEXT NOT NULL, kind TEXT NOT NULL, label TEXT NOT NULL,
@@ -207,6 +224,17 @@ describe('which service searched', () => {
     createResearchTables(sql)
     createResearchTables(sql)
     const columns = sql.exec<{ name: string }>("SELECT name FROM pragma_table_info('research_steps')").toArray().map((c) => c.name)
-    expect(columns).toEqual(expect.arrayContaining(['provider', 'backup_reason']))
+    expect(columns).toContain('provider')
+  })
+
+  it('still writes to a database that has the old backup_reason column', () => {
+    const sql = memorySql()
+    sql.exec(`CREATE TABLE research_steps (
+      seq INTEGER PRIMARY KEY AUTOINCREMENT, run_id TEXT NOT NULL, kind TEXT NOT NULL, label TEXT NOT NULL,
+      detail TEXT, url TEXT, created_at INTEGER NOT NULL, provider TEXT, backup_reason TEXT)`)
+    createResearchTables(sql)
+    const run = createRun(sql, 'q', '2026-11-10')
+    addStep(sql, run.id, { kind: 'search', label: 'a', detail: '5 results from Tavily', provider: 'tavily' })
+    expect(runDetail(sql, run.id)?.searchedWith).toEqual({ tavily: 1 })
   })
 })
