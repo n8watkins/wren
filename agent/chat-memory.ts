@@ -132,6 +132,23 @@ export function usedFacts(answer: string, facts: Memory[]): Memory[] {
   })
 }
 
+/**
+ * A Wren answer as plain text for a note (the Memory page shows notes as
+ * text): bullets as "•", no emphasis or heading marks, links as "text (address)".
+ */
+export function plainFrom(markdown: string): string {
+  return markdown
+    .replace(/^```[^\n]*\n?/gm, '')
+    .replace(/^#{1,6}\s+/gm, '')
+    .replace(/^(\s*)[*+-]\s+/gm, '$1• ')
+    .replace(/\[([^\]]+)\]\((https?:[^)\s]+)\)/g, '$1 ($2)')
+    .replace(/(\*\*|__)(?=\S)(.+?)(?<=\S)\1/g, '$2')
+    .replace(/(?<![\w*])\*(?=\S)([^*\n]+?)(?<=\S)\*(?![\w*])/g, '$1')
+    .replace(/`([^`\n]+)`/g, '$1')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim()
+}
+
 /** Cuts a message to a note's length, at a word where it can. */
 export function noteFrom(content: string): string {
   const text = content.trim()
@@ -338,7 +355,7 @@ export class ChatMemory {
       if (existing) return { ok: true, memory: existing }
       this.sql.exec("DELETE FROM message_memory WHERE message_id = ? AND kind = 'pinned'", message.id)
     }
-    const text = noteFrom(message.content)
+    const text = noteFrom(message.role === 'model' ? plainFrom(message.content) : message.content)
     if (!text) return { ok: false, code: 'bad_request' }
     const same = findSameText(this.sql, 'note', text)
     const result = same ? { ok: true as const, memory: same } : await engine.addNote(text, { chatId, messageId: message.id })

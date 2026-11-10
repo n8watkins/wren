@@ -51,11 +51,12 @@ function Answer({
         {message.status === 'stopped' && <span className="st">Stopped</span>}
         {message.status === 'error' && <span className="st err">Cut off</span>}
       </div>
-      {memory && recalled && recalled.length > 0 && <RecallChips memories={recalled} />}
       <div className="md">
         {message.content ? <Markdown text={message.content} /> : null}
         {streaming && <span className="caret" aria-hidden="true" />}
       </div>
+      {/* Under the answer, where reading ends: chips that arrive after it don't move the text. */}
+      {memory && recalled && recalled.length > 0 && <RecallChips memories={recalled} />}
       {!streaming && (
         <div className="acts">
           <button type="button" onClick={copy}>

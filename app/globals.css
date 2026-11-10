@@ -949,7 +949,6 @@ svg.wren.talking .head {
 .saved.off {
   background: none;
   color: var(--text-3);
-  padding-right: 10px;
 }
 .saved.off .st,
 .saved.off .fact::before {

@@ -1,7 +1,7 @@
 import { createServer, type Server } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { ChatMemory, labelOf, noteFrom, recallContext, usedFacts } from '../../agent/chat-memory'
+import { ChatMemory, labelOf, noteFrom, plainFrom, recallContext, usedFacts } from '../../agent/chat-memory'
 import { addMessage, createChat, createChatTables, deleteChat } from '../../agent/chats'
 import { MemoryAiError, MemoryEngine, RECALL_RULE, SEARCH_RULE, meaningMatches, type FileStore, type MemoryAi } from '../../agent/memory'
 import { memoryAi } from '../../agent/memory-ai'
@@ -321,6 +321,17 @@ describe('Save to Memory', () => {
     const copy = addMessage(sql, chat.id, 'user', 'Remember the attic needs insulating.')
     const third = await chatMemory.saveMessage({ ...from, chatId: chat.id, message: copy })
     expect(third.ok && third.memory.id).toBe(second.ok && second.memory.id)
+  })
+
+  it('saves a Wren answer as plain text, and your own words as you wrote them', async () => {
+    expect(plainFrom('## Snacks\n\n*   **Greek yogurt:** high in *protein*.\n- See [the guide](https://example.com/g) and `oats`.')).toBe(
+      'Snacks\n\n• Greek yogurt: high in protein.\n• See the guide (https://example.com/g) and oats.'
+    )
+    expect(plainFrom('2 * 3 * 4 and snake_case_name')).toBe('2 * 3 * 4 and snake_case_name')
+    const { chatMemory, chat, sql } = setup()
+    const mine = addMessage(sql, chat.id, 'user', 'Keep **this** exactly')
+    const saved = await chatMemory.saveMessage({ ...from, chatId: chat.id, message: mine })
+    expect(saved.ok && saved.memory.text).toBe('Keep **this** exactly')
   })
 
   it('cuts a long message to a note at a word', () => {
