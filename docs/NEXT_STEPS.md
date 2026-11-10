@@ -19,10 +19,13 @@ Settled: sign-in emails come from `wren@n8builds.dev`, and Wren lives at `wren.n
 - Phase 2, memory in chat: recall the most relevant memories before answering, with "From your Memory" chips; call `rememberFromChat` after an answer and show "Saved to Memory · Undo"; a "Save to Memory" button on messages.
   Tune `MEANING_MIN_SCORE` and `DUPLICATE_SCORE` in `agent/memory.ts` against real gemini-embedding-2 searches (they were set without a live run).
 - Phase 3, research in chat: a "Research this" action in the composer, the run as a progress card in the chat, the report landing in the chat, and "Save findings to Memory". The engine and the Runs page are done.
-- Phase 4, voice: Gemini Live through the person's agent (WebSocket relay), metered by the minute; chat moves onto the agent's WebSocket with resumable streams.
+- Typed chat onto the agent's WebSocket, with resumable streams (split out of phase 4 on 2026-11-10; voice already has its own socket).
+- Voice, once live: check a real session on wren.n8builds.dev (the mic needs https), and watch Gemini Live's per-minute cost against the 10-minute allowance.
 - Launch: portfolio card, build page on n8builds.dev, OpenPing watching `/api/health`.
 
 ## Done
+
+- 2026-11-10: voice (phase 4, lane A): Gemini Live (`gemini-3.8-live`) relayed by each person's agent over its own WebSocket, barge-in, transcripts saved in the chat, 10 minutes a day metered in seconds, your own key with no limit.
 
 - 2026-11-09: research engine and the Runs page (phase 3, lane B): runs in each person's agent, Tavily with Gemini Google Search as backup, safe fetching, cited reports.
 - 2026-11-09: release-kit and CI checks (#1); phase 1, foundation and chat (#4).

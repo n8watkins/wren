@@ -16,7 +16,7 @@ Set with `npx wrangler secret put NAME` (never on the command line):
 | Secret | Needed for | Without it |
 |---|---|---|
 | `BETTER_AUTH_SECRET` | signing session cookies | the Worker can't start sessions (required) |
-| `GEMINI_API_KEY` | the shared demo key | chat works only with a visitor's own key; `/api/health` says so |
+| `GEMINI_API_KEY` | the shared demo key (chat, voice, research, memory) | chat and voice work only with a visitor's own key; `/api/health` says so |
 | `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET` | GitHub sign-in | the GitHub button is disabled and says it isn't set up |
 
 The GitHub OAuth app's callback URL is `<PUBLIC_URL>/api/auth/callback/github`.

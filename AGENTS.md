@@ -20,7 +20,7 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 
 ## Wren
 
-Wren is a ChatGPT-style AI assistant, built as a portfolio demo: typed chat now, then voice, research and memory.
+Wren is a ChatGPT-style AI assistant, built as a portfolio demo: typed and spoken chat, research and memory.
 Present it as its own product; never describe it publicly as a merge of earlier projects.
 
 - **Decisions**: `docs/DECISIONS.md` holds the owner's standing decisions and the technical choices. Read it before changing product, design or workflow, and add every new decision there with its date.
@@ -32,7 +32,8 @@ Present it as its own product; never describe it publicly as a merge of earlier 
 - `app/(app)/layout.tsx` renders the whole client shell (`components/app/WrenApp.tsx`) for every page route; routes are `/`, `/chat/:id`, `/runs`, `/memory`.
 - `app/api/*`: every person-scoped route is wrapped in `authed()` (`lib/server/route.ts`): verified session, then burst limits. Identity only ever comes from the session.
 - `agent/wren-agent.ts`: one Durable Object per person (Agents SDK), named by the verified user id: chats, the daily meter, and the only caller of Gemini (`agent/gemini.ts`).
-- `worker/index.ts`: the Worker entry; wraps OpenNext, sets the nonce CSP and security headers, exports the Durable Objects.
+- `worker/index.ts`: the Worker entry; wraps OpenNext, sets the nonce CSP and security headers, takes the voice socket (`worker/voice.ts`, before OpenNext), exports the Durable Objects.
+- Voice: `POST /api/voice/ticket` (authed) signs a short ticket, `GET /api/voice` opens the socket, and the person's agent relays it to Gemini Live (`agent/voice.ts`).
 - `lib/limits.ts`: every limit and size cap. `lib/log.ts`: the only logger (counts and codes, never content).
 
 ### Running it
