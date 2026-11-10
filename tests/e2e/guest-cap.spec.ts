@@ -10,6 +10,9 @@ import { guestSay, startGuest } from './helpers'
 test.describe.configure({ mode: 'serial' })
 
 test('past the site-wide cap, guests are told to sign in', async ({ playwright, baseURL }) => {
+  // About 120 answered messages one after another: 18 s on a quiet machine, so
+  // the default 30 s timed out on a busy one (2026-11-10).
+  test.setTimeout(90_000)
   let sent = 0
   let capped: { status: number; error: string | null } | null = null
   for (let guest = 0; guest < 40 && !capped; guest++) {
