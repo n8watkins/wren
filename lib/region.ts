@@ -66,7 +66,7 @@ export interface Region {
   name: string | null
 }
 
-export const ANY_REGION: Region = { ownKeyAdvised: false, name: null }
+const ANY_REGION: Region = { ownKeyAdvised: false, name: null }
 
 /** The region for a country code from Cloudflare; an unknown or missing code gets the usual notice. */
 export function regionFor(country: string | null | undefined): Region {
