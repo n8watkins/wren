@@ -1682,9 +1682,11 @@ svg.wren.talking .head {
     width: 18px;
     height: 18px;
   }
+  /* On: outlined with a check, so it never reads as the filled saffron start button beside it. */
   .mcb .rb.on {
-    color: var(--on-saffron);
-    background: var(--saffron);
+    color: var(--saffron);
+    background: var(--saffron-soft);
+    box-shadow: inset 0 0 0 1.5px var(--saffron);
   }
   .mcb.research {
     border-color: color-mix(in srgb, var(--saffron) 55%, var(--line-strong));

@@ -208,7 +208,7 @@ export function Composer({
         )}
         <div className={researching ? 'mcb research' : 'mcb'}>
           <button type="button" className={researching ? 'rb on' : 'rb'} aria-label="Research" {...researchToggle}>
-            <Icon name="res" />
+            <Icon name={researching ? 'check' : 'res'} />
           </button>
           <label className="sr-only" htmlFor="composer-phone">
             Message Wren
