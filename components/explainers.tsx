@@ -36,7 +36,7 @@ const EXPLAINERS: Record<ExplainerId, Explainer> = {
     tone: 'c-sa',
     kicker: 'Research',
     title: 'How research works',
-    body: 'Start a run from Research runs. Wren plans a few searches, opens the most useful pages and reads them, then writes a report. It can only cite a page it actually read, and every step stays visible so you can check it. Starting a run from chat comes in the next update.',
+    body: `Turn on Research in the composer and ask, or use Research this on an answer; Research runs has every run too. Wren plans a few searches, opens the most useful pages and reads them, then writes a report into your chat. It can only cite a page it actually read, every step stays visible so you can check it, and you can keep chatting about the report. Signed in, you get ${DAILY_LIMITS.research} runs a day.`,
     flow: ['Plan', 'Search', 'Read pages', 'Write + cite'],
     under: 'each run lives in your own agent and saves every step, so it keeps going if you close the tab.',
     soon: false,

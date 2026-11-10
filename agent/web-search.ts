@@ -1,5 +1,6 @@
 import { RESEARCH_LIMITS } from '../lib/limits'
 import { log } from '../lib/log'
+import type { BackupReason, SearchProvider } from '../lib/research'
 
 /**
  * Web search for research runs: Tavily first, because it returns each page's
@@ -14,11 +15,6 @@ export interface SearchResult {
   /** The page's text, when the search service sent it. Untrusted. */
   text?: string
 }
-
-type SearchProvider = 'tavily' | 'google'
-
-/** Why a search went to the backup. */
-export type BackupReason = 'no_key' | 'out_of_credits' | 'rejected' | 'error'
 
 export interface WebSearch {
   provider: SearchProvider

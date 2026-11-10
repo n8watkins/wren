@@ -15,6 +15,18 @@ import {
   type ChatSummary,
 } from './chats'
 import { answerStream } from './answer-stream'
+import {
+  createChatResearchTable,
+  findingsNote,
+  forHistory,
+  linkRun,
+  liveRuns,
+  pruneChatResearch,
+  researchFor,
+  researchMarks,
+  settleRun,
+  withResearch,
+} from './chat-research'
 import { ChatMemory } from './chat-memory'
 import { MemoryEngine, type MemoryList, type MemoryResult } from './memory'
 import { memoryAi } from './memory-ai'
@@ -27,6 +39,7 @@ import type { AutoSave, Memory, MemoryKind } from '../lib/memory'
 import { optionalSetting } from '../lib/secrets'
 import type { ChatStreamEvent } from '../lib/stream-events'
 import { ResearchRuns } from './research'
+import { runDetail } from './research-store'
 import { connectLive } from './gemini'
 import { WREN_VOICE_PROMPT } from './persona'
 import { TicketBook, VoiceRelay, acceptVoice, readVoiceHandoff, voiceHistory, type VoiceMeter } from './voice'
@@ -72,6 +85,7 @@ export class WrenAgent extends Agent<Cloudflare.Env> {
     if (!this.tablesReady) {
       createChatTables(sql)
       createMeterTable(sql)
+      createChatResearchTable(sql)
       this.tablesReady = true
     }
     return sql
@@ -84,13 +98,27 @@ export class WrenAgent extends Agent<Cloudflare.Env> {
   getChat(id: string): { chat: ChatSummary; messages: ChatMessage[]; answering: boolean } | null {
     const chat = getChat(this.db, id)
     if (!chat) return null
-    return { chat, messages: this.chatMemory.withMarks(id, listMessages(this.db, id)), answering: this.inFlight.has(id) }
+    return { chat, messages: this.chatMemory.withMarks(id, this.chatMessages(id)), answering: this.inFlight.has(id) }
+  }
+
+  /** A chat's messages with their research marks, any run that has ended written in first. */
+  private chatMessages(chatId: string): ChatMessage[] {
+    const sql = this.db
+    for (const runId of liveRuns(sql, chatId)) settleRun(sql, runId, this.research.get(runId))
+    const marks = researchMarks(sql, chatId, (runId) => runDetail(sql, runId))
+    return withResearch(listMessages(sql, chatId), marks)
+  }
+
+  /** The conversation for the model: research reports in place, size-capped, then the newest turns that fit. */
+  private historyOf(chatId: string): { role: 'user' | 'model'; text: string }[] {
+    return historyForModel(forHistory(this.chatMessages(chatId)))
   }
 
   deleteChat(id: string): boolean {
     this.inFlight.get(id)?.abort()
     const deleted = deleteChat(this.db, id)
     this.chatMemory.prune()
+    pruneChatResearch(this.db)
     return deleted
   }
 
@@ -146,6 +174,12 @@ export class WrenAgent extends Agent<Cloudflare.Env> {
 
     let userMessage: ChatMessage
     if (request.regenerate && chat) {
+      // A research report isn't regenerated as a chat answer; start a new run instead.
+      const last = listMessages(sql, chat.id).at(-1)
+      if (last && researchFor(sql, last.id)) {
+        await refund()
+        return { ok: false, code: 'nothing_to_regenerate' }
+      }
       const prompt = dropLastAnswer(sql, chat.id)
       if (!prompt) {
         await refund()
@@ -159,7 +193,7 @@ export class WrenAgent extends Agent<Cloudflare.Env> {
       userMessage = addMessage(sql, chat.id, 'user', text)
     }
 
-    const history = historyForModel(listMessages(sql, chat.id))
+    const history = this.historyOf(chat.id)
     const answer = addMessage(sql, chat.id, 'model', '', 'stopped')
     const controller = new AbortController()
     this.inFlight.set(chat.id, controller)
@@ -280,9 +314,15 @@ export class WrenAgent extends Agent<Cloudflare.Env> {
   private researchRuns?: ResearchRuns
 
   private get research(): ResearchRuns {
-    this.researchRuns ??= new ResearchRuns(this.db, this.env, async (runId) => {
-      await this.schedule(0, 'researchTick', { runId })
-    })
+    this.researchRuns ??= new ResearchRuns(
+      this.db,
+      this.env,
+      async (runId) => {
+        await this.schedule(0, 'researchTick', { runId })
+      },
+      // A run started from chat lands there as soon as it ends.
+      (runId) => void settleRun(this.db, runId, runDetail(this.db, runId))
+    )
     return this.researchRuns
   }
 
@@ -293,6 +333,33 @@ export class WrenAgent extends Agent<Cloudflare.Env> {
     const started = await this.research.start(question)
     if (!started.ok) await network.giveBack('research')
     return started
+  }
+
+  /**
+   * "Research" from chat: starts a run (behind the same daily counts), then
+   * adds the question and Wren's message that shows the run to the chat (a
+   * new one when there is none). The report lands in that message when the
+   * run ends.
+   */
+  async startResearchInChat(request: { chatId?: string; question: string; ip: string }) {
+    const sql = this.db
+    if (request.chatId && !getChat(sql, request.chatId)) return { ok: false as const, code: 'chat_not_found' as const }
+    const started = await this.startResearch(request.question, request.ip)
+    if (!started.ok) return started
+    // The awaits above let other requests in: the chat may be gone now.
+    const chat = (request.chatId ? getChat(sql, request.chatId) : null) ?? createChat(sql, titleFrom(request.question))
+    const ask = addMessage(sql, chat.id, 'user', request.question)
+    const card = addMessage(sql, chat.id, 'model', '', 'done')
+    linkRun(sql, { chatId: chat.id, askId: ask.id, messageId: card.id, runId: started.run.id, question: request.question })
+    settleRun(sql, started.run.id, runDetail(sql, started.run.id))
+    const messages = this.chatMessages(chat.id)
+    return {
+      ok: true as const,
+      chat: getChat(sql, chat.id) ?? chat,
+      userMessage: messages.find((m) => m.id === ask.id) ?? ask,
+      message: messages.find((m) => m.id === card.id) ?? card,
+      run: started.run,
+    }
   }
 
   listResearch() {
@@ -416,7 +483,10 @@ export class WrenAgent extends Agent<Cloudflare.Env> {
     if (!getChat(this.db, chatId)) return { ok: false, code: 'chat_not_found' }
     const message = listMessages(this.db, chatId).find((m) => m.id === messageId)
     if (!message || !message.content.trim()) return { ok: false, code: 'message_not_found' }
-    return this.chatMemory.saveMessage({ chatId, message, userKey, ip })
+    // A research report: "Save findings to Memory" keeps the question and the pages it cites with it.
+    const research = researchFor(this.db, messageId)
+    const text = research?.state === 'done' ? findingsNote(research.question, message.content, research.sources) : undefined
+    return this.chatMemory.saveMessage({ chatId, message, userKey, ip, text })
   }
 
   /** Undo one of Wren's saves in a chat. */
@@ -478,7 +548,7 @@ export class WrenAgent extends Agent<Cloudflare.Env> {
     let chat = handoff.chatId ? getChat(sql, handoff.chatId) : null
     if (handoff.chatId && !chat) return new Response(null, { status: 404 })
     await this.voiceSession?.end('replaced')
-    const history = chat ? voiceHistory(historyForModel(listMessages(sql, chat.id))) : []
+    const history = chat ? voiceHistory(this.historyOf(chat.id)) : []
     return acceptVoice((client) => {
       const relay: VoiceRelay = new VoiceRelay({
         client,

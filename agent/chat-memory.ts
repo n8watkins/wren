@@ -331,11 +331,12 @@ export class ChatMemory {
   }
 
   /**
-   * "Save to Memory" on a message: the message (yours or Wren's) as a note.
+   * "Save to Memory" on a message: the message (yours or Wren's) as a note,
+   * or the note the caller wrote for it (`text`).
    * One message is saved once: a second click, a double send or a note with
    * the same words gets the memory that is already there.
    */
-  saveMessage(input: RequestFrom & { chatId: string; message: ChatMessage }): Promise<MemoryResult<{ memory: Memory }>> {
+  saveMessage(input: RequestFrom & { chatId: string; message: ChatMessage; text?: string }): Promise<MemoryResult<{ memory: Memory }>> {
     const key = input.message.id
     const pending = this.saving.get(key)
     if (pending) return pending
@@ -344,7 +345,7 @@ export class ChatMemory {
     return work
   }
 
-  private async save(input: RequestFrom & { chatId: string; message: ChatMessage }): Promise<MemoryResult<{ memory: Memory }>> {
+  private async save(input: RequestFrom & { chatId: string; message: ChatMessage; text?: string }): Promise<MemoryResult<{ memory: Memory }>> {
     const { message, chatId } = input
     const engine = this.engineFor(input.userKey, input.ip)
     const pinned = this.sql
@@ -355,7 +356,8 @@ export class ChatMemory {
       if (existing) return { ok: true, memory: existing }
       this.sql.exec("DELETE FROM message_memory WHERE message_id = ? AND kind = 'pinned'", message.id)
     }
-    const text = noteFrom(message.role === 'model' ? plainFrom(message.content) : message.content)
+    // `text`, when given, is the note already written (a research report's findings).
+    const text = noteFrom(input.text ?? (message.role === 'model' ? plainFrom(message.content) : message.content))
     if (!text) return { ok: false, code: 'bad_request' }
     const same = findSameText(this.sql, 'note', text)
     const result = same ? { ok: true as const, memory: same } : await engine.addNote(text, { chatId, messageId: message.id })

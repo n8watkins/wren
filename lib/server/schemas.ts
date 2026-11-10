@@ -29,6 +29,12 @@ export const researchRequest = z.strictObject({
   question: z.string().trim().min(3).max(RESEARCH_LIMITS.questionChars),
 })
 
+/** A research run started from chat: the question, and the chat to add it to (a new one when there is none). */
+export const chatResearchRequest = z.strictObject({
+  chatId: chatId.optional(),
+  question: z.string().trim().min(3).max(RESEARCH_LIMITS.questionChars),
+})
+
 export const runId = z.uuid()
 
 /** A Turnstile token, to start a guest session. */

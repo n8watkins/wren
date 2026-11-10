@@ -111,11 +111,14 @@ export function SaveToMemory({
   savedAs,
   memory,
   compact = false,
+  label = 'Save to memory',
 }: {
   messageId: string
   savedAs?: string
   memory: ThreadMemory
   compact?: boolean
+  /** The button's words ("Save findings to memory" on a research report). */
+  label?: string
 }) {
   const [saved, setSaved] = useState<string | null>(savedAs ?? null)
   const [busy, setBusy] = useState(false)
@@ -163,7 +166,7 @@ export function SaveToMemory({
         data-testid="save-to-memory"
       >
         <Icon name="mem" />
-        {!compact && (busy ? 'Saving…' : 'Save to memory')}
+        {!compact && (busy ? 'Saving…' : label)}
       </button>
       {error && (
         <span className="memerr" role="alert">
