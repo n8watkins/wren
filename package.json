@@ -6,7 +6,7 @@
     "dev": "next dev -p 3120",
     "build": "next build",
     "build:worker": "opennextjs-cloudflare build",
-    "preview": "opennextjs-cloudflare build && npm run db:migrate:local && wrangler dev --port 3120 --local-upstream localhost:3120 --upstream-protocol http --var TURNSTILE_SITE_KEY:1x00000000000000000000AA --var TURNSTILE_SECRET_KEY:1x0000000000000000000000000000000AA --var MEMORY_VECTORS:local",
+    "preview": "opennextjs-cloudflare build && npm run db:migrate:local && wrangler dev --port 3120 --local-upstream localhost:3120 --upstream-protocol http --var TURNSTILE_SITE_KEY:1x00000000000000000000AA --var TURNSTILE_SECRET_KEY:1x0000000000000000000000000000000AA --var MEMORY_VECTORS:local --test-scheduled",
     "deploy": "opennextjs-cloudflare build && opennextjs-cloudflare deploy",
     "check:deploy": "wrangler deploy --dry-run",
     "cf-typegen": "wrangler types --env-interface CloudflareEnv --strict-vars=false cloudflare-env.d.ts",

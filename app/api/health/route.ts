@@ -4,12 +4,15 @@ import { optionalSetting } from '@/lib/secrets'
 import { jsonResponse } from '@/lib/server/http'
 import { guestChatConfigured } from '@/lib/server/turnstile'
 import { DAILY_LIMITS } from '@/lib/limits'
+import { MODEL_CHECK_INSTANCE, modelsHealth } from '@/lib/model-check'
 
 /**
  * One check per feature, for OpenPing and for a person reading it. It says
  * what works, never a secret. 503 when something core is down or the
  * production configuration is unsafe; "degraded" when a feature is waiting on
- * a setting (a key the owner hasn't added yet).
+ * a setting (a key the owner hasn't added yet) or the daily model check
+ * (lib/model-check.ts) found a model or search service not answering. Health
+ * itself never calls a model: it reads that check's saved result.
  */
 
 type Check = { ok: boolean | null; detail: string }
@@ -51,8 +54,11 @@ export async function GET(): Promise<Response> {
   const env = getEnv()
   const production = isProduction(env) && new URL(env.PUBLIC_URL).protocol === 'https:'
 
-  const database = await timed(() => env.DB.prepare('SELECT 1 AS ok').first<{ ok: number }>())
-  const agents = await timed(() => env.DAILY_COUNTER.getByName('health').ping())
+  const [database, agents, modelCheck] = await Promise.all([
+    timed(() => env.DB.prepare('SELECT 1 AS ok').first<{ ok: number }>()),
+    timed(() => env.DAILY_COUNTER.getByName('health').ping()),
+    timed(() => env.MODEL_CHECK.getByName(MODEL_CHECK_INSTANCE).state()),
+  ])
   const testHooks =
     env.EMAIL_TRANSPORT === 'outbox' ||
     optionalSetting(env, 'GEMINI_BASE_URL') !== undefined ||
@@ -91,10 +97,16 @@ export async function GET(): Promise<Response> {
           : 'no Tavily key yet: searches with Gemini Google Search',
     },
     memory: memoryCheck(env, demoKey),
+    models: modelCheck.value
+      ? modelsHealth(modelCheck.value, Date.now())
+      : { ok: false, detail: "couldn't read the daily model check's last result" },
   }
 
   const core = checks.database.ok && checks.agents.ok && checks.config.ok
   const degraded = Object.values(checks).some((check) => check.ok === false)
   const status = !core ? 'down' : degraded ? 'degraded' : 'ok'
-  return jsonResponse({ status, checks }, { status: core ? 200 : 503 })
+  // Each dependency's last real call: ok, how long it took, and a short error code.
+  const lastRun = modelCheck.value?.lastRun
+  const models = lastRun ? { ranAt: new Date(lastRun.ranAt).toISOString(), results: lastRun.results } : null
+  return jsonResponse({ status, checks, models }, { status: core ? 200 : 503 })
 }

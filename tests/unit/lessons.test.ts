@@ -93,6 +93,11 @@ describe('source rules', () => {
     expect(callers.map((f) => relative(ROOT, f))).toEqual(['agent/gemini.ts'])
   })
 
+  it('no route can run the daily model check: only the Worker scheduled handler starts it', () => {
+    const callers = source.filter((f) => /\b(runModelCheck|runProbes|probesFor)\(/.test(readFileSync(f, 'utf8')))
+    expect(callers.map((f) => relative(ROOT, f)).sort()).toEqual(['agent/model-check.ts', 'worker/index.ts'])
+  })
+
   it('no request handler reads a user id from what the client sent', () => {
     for (const file of source.filter((f) => f.includes('/app/'))) {
       expect(readFileSync(file, 'utf8')).not.toMatch(/(body|query|searchParams|params|headers)\??\.(get\(['"])?user[-_]?id/i)
