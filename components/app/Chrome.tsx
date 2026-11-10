@@ -248,7 +248,13 @@ export function BottomNav({ place }: { place: Place }) {
   return (
     <nav className="mnav" aria-label="Places">
       {items.map((item) => (
-        <Link key={item.place} href={item.href} className={place === item.place ? 'on' : undefined} aria-current={place === item.place ? 'page' : undefined}>
+        <Link
+          key={item.place}
+          href={item.href}
+          className={place === item.place ? 'on' : undefined}
+          aria-current={place === item.place ? 'page' : undefined}
+          data-tip={item.place === 'memory' ? 'mem' : undefined}
+        >
           <Icon name={item.icon} />
           {item.label}
         </Link>

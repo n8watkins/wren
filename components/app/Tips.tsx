@@ -10,8 +10,9 @@ import { Icon } from '../Icons'
  * has one sentence, "How this works", and a toolbar: Skip tour, Previous (←),
  * a "2 of 4" counter and Next (→), which reads Done on the last step. X, Esc
  * and Skip tour end the whole tour; the arrow keys move back and forward and
- * Enter is Next. Controls that aren't on screen (a phone has no
- * sidebar) are left out of the count. The "?" dialog's "Show me around"
+ * Enter is Next. A tip points at whichever of its controls is on screen
+ * (on a phone: the Memory tab and the header's ring); one with none is left
+ * out of the count. The "?" dialog's "Show me around"
  * starts it again.
  */
 const TIPS: { id: string; explainer: ExplainerId; text: string; side: 'above' | 'right' }[] = [
