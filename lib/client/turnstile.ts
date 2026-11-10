@@ -40,6 +40,11 @@ function load(): Promise<TurnstileApi> {
   return loading
 }
 
+function pageTheme(): 'light' | 'dark' | 'auto' {
+  const chosen = document.documentElement.getAttribute('data-theme')
+  return chosen === 'light' || chosen === 'dark' ? chosen : 'auto'
+}
+
 /** Runs the check and resolves with a one-time token. */
 export async function turnstileToken(container: HTMLElement, siteKey: string): Promise<string> {
   const api = await load()
@@ -48,6 +53,8 @@ export async function turnstileToken(container: HTMLElement, siteKey: string): P
       sitekey: siteKey,
       action: 'guest-start',
       appearance: 'interaction-only',
+      // Wren's own theme choice (data-theme), else the system's, like the page.
+      theme: pageTheme(),
       callback: (token: string) => {
         resolve(token)
         setTimeout(() => api.remove(id), 0)

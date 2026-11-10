@@ -21,6 +21,9 @@ export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
   viewportFit: 'cover',
+  // Android Chrome shrinks the page for the on-screen keyboard, so the
+  // composer stays above it (iOS: components/app/useVisualViewport.ts).
+  interactiveWidget: 'resizes-content',
   themeColor: [
     { media: '(prefers-color-scheme: light)', color: '#fbf7f1' },
     { media: '(prefers-color-scheme: dark)', color: '#14100e' },

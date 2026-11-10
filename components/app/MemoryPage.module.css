@@ -36,6 +36,7 @@
 .urow {
   display: flex;
   flex-direction: column;
+  justify-content: space-between;
   gap: 5px;
   font-size: 12px;
   color: var(--text-3);
@@ -230,7 +231,9 @@
 }
 .search input {
   flex: 1;
+  align-self: stretch;
   min-width: 0;
+  text-overflow: ellipsis;
   border: 0;
   outline: 0;
   background: none;
@@ -382,10 +385,16 @@
   gap: 2px 0;
   font-size: 12px;
   color: var(--text-3);
+  /* Every item starts with a "·"; the first column is clipped, so a line
+     never starts with one when the items wrap on a narrow screen. */
+  margin-left: -15px;
+  clip-path: inset(-4px -4px -4px 15px);
 }
-.meta > span + span::before {
+.meta > span::before {
   content: '·';
-  margin: 0 7px;
+  display: inline-block;
+  width: 15px;
+  text-align: center;
 }
 .meta a {
   color: var(--sage);
@@ -397,7 +406,30 @@
   margin-top: -2px;
 }
 .pending {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border: 0;
+  background: none;
+  padding: 0;
+  font: inherit;
   color: var(--saffron);
+}
+.pending svg {
+  width: 13px;
+  height: 13px;
+}
+.pendingWhy {
+  flex-basis: 100%;
+  margin-top: 2px;
+  color: var(--text-2);
+}
+@media (max-width: 860px) {
+  /* 44 px to tap, without making the line taller. */
+  .pending {
+    padding: 12px 0;
+    margin: -12px 0;
+  }
 }
 .acts {
   display: flex;
@@ -513,7 +545,10 @@
   .add {
     height: 44px;
     justify-content: center;
+    gap: 5px;
+    padding: 0 6px;
     font-size: 14px;
+    white-space: nowrap;
   }
   .search {
     height: 46px;
@@ -529,8 +564,9 @@
     scrollbar-width: none;
   }
   .chip {
-    height: 36px;
+    height: 44px;
     flex: none;
+    padding: 0 14px;
   }
   .card {
     padding: 12px 6px 12px 12px;
@@ -541,8 +577,8 @@
     margin: -6px 0;
   }
   .acts button {
-    width: 40px;
-    height: 40px;
+    width: 44px;
+    height: 44px;
   }
   .area,
   .input,
@@ -571,6 +607,12 @@
   .confirm :global(.btn) {
     flex: 1;
     height: 42px;
+  }
+}
+
+@media (max-width: 359px) {
+  .add {
+    font-size: 13px;
   }
 }
 

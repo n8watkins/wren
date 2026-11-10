@@ -4,8 +4,8 @@ import { composer, isPhone } from './helpers'
 
 /** The tips tour: Previous and Next, a step counter, Skip tour and Done; X or Esc ends it. */
 
-// A phone has no sidebar, so the Memory "+" and the meter aren't on screen: two tips instead of four.
-const ids = (page: Page) => (isPhone(page) ? ['mic', 'res'] : ['mic', 'res', 'mem', 'meter'])
+// The same four tips on a phone: there they point at the Memory tab and the header's ring.
+const ids = () => ['mic', 'res', 'mem', 'meter']
 
 async function startTour(page: Page) {
   await page.goto('/')
@@ -16,7 +16,7 @@ async function startTour(page: Page) {
 test('Next walks through every tip and Done ends the tour', async ({ page }) => {
   await startTour(page)
   const tip = page.getByTestId('tip')
-  const steps = ids(page)
+  const steps = ids()
   for (const [i, id] of steps.entries()) {
     await expect(tip).toHaveAttribute('data-tip-id', id)
     await expect(tip.getByTestId('tip-step')).toHaveText(`${i + 1} of ${steps.length}`)
@@ -57,7 +57,7 @@ test('Previous and the Left arrow go back', async ({ page }) => {
   await expect(tip).toHaveAttribute('data-tip-id', 'res')
   await tip.getByTestId('tip-prev').click()
   await expect(tip).toHaveAttribute('data-tip-id', 'mic')
-  await expect(tip.getByTestId('tip-step')).toHaveText(`1 of ${ids(page).length}`)
+  await expect(tip.getByTestId('tip-step')).toHaveText(`1 of ${ids().length}`)
   await page.keyboard.press('ArrowRight')
   await expect(tip).toHaveAttribute('data-tip-id', 'res')
   await page.keyboard.press('ArrowLeft')
@@ -72,7 +72,7 @@ test('Enter and the Right arrow go to the next tip; typing in the composer does 
   const tip = page.getByTestId('tip')
   await page.keyboard.press('ArrowRight')
   await expect(tip).toHaveAttribute('data-tip-id', 'res')
-  await expect(tip.getByTestId('tip-step')).toHaveText(`2 of ${ids(page).length}`)
+  await expect(tip.getByTestId('tip-step')).toHaveText(`2 of ${ids().length}`)
 
   await composer(page).click()
   await composer(page).pressSequentially('hello')
@@ -81,8 +81,7 @@ test('Enter and the Right arrow go to the next tip; typing in the composer does 
 
   await tip.getByTestId('tip-next').focus()
   await page.keyboard.press('Enter')
-  if (isPhone(page)) await expect(tip).toHaveCount(0)
-  else await expect(tip).toHaveAttribute('data-tip-id', 'mem')
+  await expect(tip).toHaveAttribute('data-tip-id', 'mem')
 })
 
 for (const [how, end] of [
@@ -118,5 +117,5 @@ test('the "?" dialog starts the tips again', async ({ page }) => {
   await page.getByTestId(isPhone(page) ? 'help-phone' : 'help').click()
   await page.getByTestId('how-it-works').getByRole('button', { name: 'Show me around' }).click()
   await expect(page.getByTestId('tip')).toHaveAttribute('data-tip-id', 'mic')
-  await expect(page.getByTestId('tip-step')).toHaveText(`1 of ${ids(page).length}`)
+  await expect(page.getByTestId('tip-step')).toHaveText(`1 of ${ids().length}`)
 })

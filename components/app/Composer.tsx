@@ -64,7 +64,7 @@ export function Composer({
   /** Starts talking, or ends it. */
   onMic: () => void
   focusKey: number
-  /** The free-demo notice (components/app/DemoNotice.tsx), while it is on. */
+  /** The free-demo notice (components/app/DemoNotice.tsx), while it is on; the listening view has its own reminder instead. */
   notice?: ReactNode
 }) {
   const desk = useRef<HTMLTextAreaElement>(null)
@@ -167,7 +167,7 @@ export function Composer({
   return (
     <>
       <div className="composer">
-        {notice}
+        {voice ? null : notice}
         {alert}
         {panel}
         <div className={researching ? 'cbox research' : 'cbox'}>
@@ -203,7 +203,7 @@ export function Composer({
         </div>
       </div>
       <div className="mcomp">
-        {notice}
+        {voice ? null : notice}
         {alert}
         {panel}
         {researching && (
@@ -224,12 +224,13 @@ export function Composer({
             rows={1}
             value={draft}
             maxLength={SIZE_LIMITS.messageChars}
-            placeholder={placeholder ?? (voice ? 'Type while you talk' : 'Message or talk')}
+            placeholder={researching ? 'What to research?' : voice ? 'Type while you talk' : 'Message or talk'}
             onChange={(event) => setDraft(event.target.value)}
             onKeyDown={onKeyDown}
             data-testid="composer-phone"
           />
-          {mic}
+          {/* Research is typed: on a phone its question gets the mic's room. */}
+          {(voice || !researching) && mic}
           {(busy || researching || draft.trim()) && sendOrStop}
         </div>
       </div>

@@ -97,7 +97,7 @@ export function UsageRing({ usage, ownKey, onClick }: { usage: UsageSnapshot; ow
     ? 'Using your own Gemini key: no daily limit'
     : `${usage.chat.used} of ${usage.chat.limit} messages used today`
   return (
-    <button type="button" className="ring2" onClick={onClick} aria-label={label} title={label} data-testid="usage-ring">
+    <button type="button" className="ring2" onClick={onClick} aria-label={label} title={label} data-tip="meter" data-testid="usage-ring">
       <svg viewBox="0 0 32 32" aria-hidden="true">
         <circle cx="16" cy="16" r="13" fill="none" stroke="var(--surface-3)" strokeWidth="3.5" />
         <circle

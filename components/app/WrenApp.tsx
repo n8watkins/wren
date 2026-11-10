@@ -23,6 +23,7 @@ import { settledMessage, type ResearchMessage } from './ResearchCard'
 import { Runs } from './Runs'
 import { Thread, type StreamingAnswer } from './Thread'
 import { Tips } from './Tips'
+import { useVisualViewport } from './useVisualViewport'
 import { useVoice } from './useVoice'
 import { DemoNotice } from './DemoNotice'
 import type { Region } from '@/lib/region'
@@ -122,6 +123,7 @@ type Modal =
 export function WrenApp({ person, github, initialChats, initialUsage, guestSiteKey, guestReady, region }: WrenAppProps) {
   const router = useRouter()
   const pathname = usePathname()
+  useVisualViewport()
   const { place, chatId } = placeFrom(pathname)
 
   const [chats, setChats] = useState(initialChats)
@@ -164,10 +166,13 @@ export function WrenApp({ person, github, initialChats, initialUsage, guestSiteK
     })
     return guestStart.current
   }, [guestSiteKey])
+  // Only where a guest can chat: Memory and Runs have nothing for guests, so
+  // they never show the check's challenge.
+  const inChat = place === 'chat'
   useEffect(() => {
     // A failure here is quiet: sending tries again and says what went wrong.
-    if (guestOn && !guestReady) startGuest().catch(() => undefined)
-  }, [guestOn, guestReady, startGuest])
+    if (guestOn && !guestReady && inChat) startGuest().catch(() => undefined)
+  }, [guestOn, guestReady, inChat, startGuest])
   const guestChat = parseGuestChat(useSessionSetting(GUEST_CHAT_KEY))
   const saveGuestChat = (next: GuestChat | null) => writeSession(GUEST_CHAT_KEY, next ? JSON.stringify(next) : null)
   const [draft, setDraft] = useState('')

@@ -230,9 +230,10 @@
   }
   .stop,
   .retry {
-    height: 40px;
+    height: 44px;
   }
   .runLink {
-    padding: 10px 8px;
+    min-height: 44px;
+    padding: 0 8px;
   }
 }

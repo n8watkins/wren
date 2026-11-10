@@ -31,6 +31,7 @@ const SYMBOLS: Record<string, string> = {
   trash: '<path d="M5 7h14M10 7V5h4v2M7 7l1 12.5h8L17 7"/>',
   out: '<path d="M14 5H6.5v14H14M10.5 12H20M16.5 8.5 20 12l-3.5 3.5"/>',
   alert: '<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5v5.5M12 16.2v.3"/>',
+  info: '<circle cx="12" cy="12" r="8.5"/><path d="M12 11v5.5M12 7.8v.3"/>',
 }
 
 export type IconName = keyof typeof SYMBOLS

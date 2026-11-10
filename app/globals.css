@@ -323,6 +323,8 @@ svg.wren.talking .head {
 .app {
   height: 100vh;
   height: 100dvh;
+  /* While iOS's keyboard is up: the visible height (components/app/useVisualViewport.ts). */
+  height: var(--app-h, 100dvh);
   display: grid;
   grid-template-columns: var(--side-w) minmax(0, 1fr);
   background: var(--bg);
@@ -979,6 +981,28 @@ svg.wren.talking .head {
   text-decoration: line-through;
   color: var(--text-3);
 }
+.saved button.why {
+  display: grid;
+  place-items: center;
+  padding: 2px 6px;
+  color: color-mix(in srgb, var(--sage) 75%, var(--text-3));
+}
+.saved button.why svg {
+  width: 14px;
+  height: 14px;
+}
+.saved button.why[aria-expanded='true'] {
+  color: var(--sage);
+  background: color-mix(in srgb, var(--sage) 14%, transparent);
+}
+.saved-why {
+  margin: 0 4px 2px;
+  max-width: 420px;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--text-2);
+  text-align: right;
+}
 .saved .err {
   flex: none;
   color: var(--danger);
@@ -1138,12 +1162,21 @@ svg.wren.talking .head {
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
   gap: 16px;
   padding: 24px 24px 48px;
   min-height: 0;
   overflow-y: auto;
+  overscroll-behavior: contain;
   text-align: center;
+}
+/* Centred while it fits; when it doesn't (a short phone with the demo notice
+   and the composer below), it scrolls from the top instead of being cut off
+   above it, which justify-content: center would do. */
+.welcome > :first-child {
+  margin-top: auto;
+}
+.welcome > :last-child {
+  margin-bottom: auto;
 }
 .welcome h2 {
   font: 700 30px/1.1 var(--f-display);
@@ -1154,6 +1187,10 @@ svg.wren.talking .head {
   margin: -6px 0 0;
   color: var(--text-2);
   max-width: 440px;
+}
+/* When the sign-in line wraps, it stays centred like the sentence it ends. */
+.welcome p .linkbtn {
+  text-align: center;
 }
 .sugs {
   display: flex;
@@ -1465,6 +1502,10 @@ svg.wren.talking .head {
 }
 .demo.inbox {
   margin: 0 0 4px;
+}
+/* In "How Wren works" the box sits above the step cards: the same gap as theirs, plus a little. */
+.mtop + .demo.inbox {
+  margin-bottom: 14px;
 }
 .keyhow {
   margin: 0;
@@ -1894,6 +1935,232 @@ svg.wren.talking .head {
   }
 }
 
+/* ---------- small tablets: the phone layout, with a readable measure ---------- */
+@media (min-width: 600px) and (max-width: 860px) {
+  .mcomp {
+    width: 100%;
+    max-width: 692px;
+    margin: 0 auto;
+  }
+  /* html: the phone sheet rules come later in this file. */
+  html dialog.dialog,
+  html dialog.dialog.narrow {
+    max-width: 640px;
+    margin: auto auto 0;
+  }
+  .mmenu {
+    padding-inline: calc((100% - 560px) / 2);
+  }
+}
+
+/* ---------- phone: the first screen and touch ---------- */
+@media (max-width: 860px) {
+  .welcome {
+    gap: 12px;
+    padding: 20px 16px 24px;
+  }
+  /* The demo notice above the composer: the same words, packed for a phone
+     (no icon, the close button in the corner with the text flowing past it),
+     so the chat keeps most of the screen. */
+  .mcomp .demo {
+    position: relative;
+    display: block;
+    padding: 10px 12px 12px;
+    font-size: 12.5px;
+    line-height: 1.42;
+  }
+  .mcomp .demo > svg {
+    display: none;
+  }
+  .mcomp .demo .dtext > p:first-child::before {
+    content: '';
+    float: right;
+    width: 30px;
+    height: 20px;
+  }
+  .mcomp .demo .btn {
+    height: 44px;
+    padding: 0 16px;
+    font-size: 13.5px;
+    border-radius: 12px;
+  }
+  .mcomp .demo .dismiss {
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: 44px;
+    height: 44px;
+    margin: 0;
+  }
+  .alert .dismiss {
+    width: 44px;
+    height: 44px;
+    margin: -10px -12px -10px -6px;
+    flex: none;
+  }
+  /* The listening view: time left goes under the words, so the words and
+     End both fit at 320 px. */
+  .mcomp .voice {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    grid-template-areas:
+      'mark text end'
+      'mark left end';
+    column-gap: 10px;
+    align-items: center;
+  }
+  .mcomp .voice .vmark {
+    grid-area: mark;
+  }
+  .mcomp .voice .vtext {
+    grid-area: text;
+  }
+  .mcomp .voice .vleft {
+    grid-area: left;
+    font-size: 11.5px;
+  }
+  .mcomp .voice .vend {
+    grid-area: end;
+  }
+  .mcb textarea::placeholder {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  /* Landscape on a notched phone: keep clear of the sides. */
+  .mhd {
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(14px, env(safe-area-inset-right, 0px));
+  }
+  .mcomp,
+  .mnav {
+    padding-left: max(12px, env(safe-area-inset-left, 0px));
+    padding-right: max(12px, env(safe-area-inset-right, 0px));
+  }
+
+  /* Touch targets: 44 px on a phone (WCAG 2.5.5), the look unchanged where
+     the control is small on purpose (the header's ring and "?" keep their
+     size and get a larger hit area). */
+  .mhd .tt {
+    min-height: 44px;
+  }
+  .mib,
+  .ring2 {
+    position: relative;
+  }
+  .mib::after,
+  .ring2::after {
+    content: '';
+    position: absolute;
+    inset: -6px;
+  }
+  .ring2::after {
+    inset: -6px -4px;
+  }
+  .mmenu .newchat,
+  .mmenu .btn {
+    min-height: 44px;
+  }
+  .mmenu .recent > a {
+    min-height: 44px;
+    display: flex;
+    align-items: center;
+  }
+  .mmenu .recent .del {
+    width: 44px;
+    height: 44px;
+    margin-right: 0;
+  }
+  /* .app: the base .btn rule comes later in this file. */
+  .app .btn {
+    height: 44px;
+  }
+  .mmenu .who small button {
+    min-height: 44px;
+    margin: -13px 0;
+  }
+  .mmenu .theme button {
+    min-height: 44px;
+    padding: 0 14px;
+    font-size: 13px;
+  }
+  .mmenu .meter .h button {
+    min-height: 44px;
+    min-width: 44px;
+    margin: -12px -6px;
+    padding: 0 6px;
+  }
+  .sug {
+    min-height: 44px;
+  }
+  .mcb .rb {
+    width: 44px;
+    height: 44px;
+    margin: 0;
+  }
+  .acts button,
+  .acts a.mem {
+    min-height: 44px;
+    padding: 4px 10px;
+    font-size: 13px;
+  }
+  .umem {
+    width: 44px;
+    height: 44px;
+    margin-bottom: 0;
+  }
+  /* "Saved to Memory · Undo (i)" on top and the fact under it, so a narrow
+     screen still shows the fact and every control is thumb-sized. */
+  .saved {
+    flex-wrap: wrap;
+    column-gap: 6px;
+    width: 100%;
+    padding: 0 0 0 12px;
+    border-radius: 16px;
+  }
+  .saved .st {
+    flex: 1;
+    line-height: 32px;
+  }
+  /* 44 px to tap, overlapping the pill's edges so the row stays 32 px. */
+  .saved button {
+    min-height: 44px;
+    margin: -6px 0;
+    padding: 0 12px;
+  }
+  .saved button.why {
+    min-width: 44px;
+    padding: 0;
+  }
+  .saved .fact {
+    order: 1;
+    flex-basis: 100%;
+    margin: -10px 0 -4px;
+    padding: 10px 12px 10px 0;
+    line-height: 24px;
+  }
+  .saved {
+    padding-top: 6px;
+    padding-bottom: 6px;
+  }
+  .saved .fact::before {
+    content: none;
+  }
+  .saved.off {
+    padding-left: 0;
+  }
+  .saved-why {
+    align-self: stretch;
+    max-width: none;
+    margin: 0 12px 4px;
+    text-align: left;
+  }
+  .demo .btn {
+    min-height: 44px;
+  }
+}
+
 /* ---------- buttons ---------- */
 .btn {
   height: 36px;
@@ -1964,6 +2231,9 @@ dialog.dialog.narrow {
 .dialog .inner {
   position: relative;
   padding: 26px 28px 22px;
+}
+.dialog .inner:focus {
+  outline: none;
 }
 .dialog .x {
   position: absolute;
@@ -2264,8 +2534,14 @@ dialog.dialog.narrow {
     margin: 2px auto 12px;
   }
   .dialog .x {
-    top: 14px;
-    right: 12px;
+    top: 8px;
+    right: 6px;
+    width: 44px;
+    height: 44px;
+  }
+  .dialog .btn,
+  .dialog .field input {
+    min-height: 44px;
   }
   .mtop {
     margin-bottom: 12px;
@@ -2466,10 +2742,14 @@ dialog.dialog.narrow {
     min-height: 44px;
     font-size: 13px;
   }
+  .coach .cf button {
+    padding: 14px 0;
+    margin: -14px 0;
+  }
   .coach .cx {
-    width: 36px;
-    height: 36px;
-    margin: -8px -8px 0 0;
+    width: 44px;
+    height: 44px;
+    margin: -12px -12px 0 0;
   }
 }
 .coach button:focus-visible {
