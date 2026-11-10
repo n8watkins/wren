@@ -116,3 +116,49 @@ test('a rejected personal key is shown as that, never swapped for the demo key',
   const usage = await (await page.request.get('/api/usage')).json()
   expect(usage.voiceMinutes.used).toBe(0)
 })
+
+test('voice uses Memory: your facts, a search by meaning, a save with Undo, all kept after a reload', async ({ page, baseURL }) => {
+  await signIn(page, baseURL!)
+  // A fact Wren saves from typed chat, and a note of your own.
+  await sendMessage(page, 'I am vegetarian.')
+  await expect(page.getByTestId('memory-saved')).toHaveCount(1, { timeout: 20_000 })
+  const note = await page.request.post('/api/memory', { data: { kind: 'note', text: 'Dinner ideas: lentil curry and mushroom risotto.' } })
+  expect(note.status()).toBe(201)
+
+  await page.goto('/')
+  await scope(page).getByTestId('mic').click()
+  // A spoken turn: Wren was given the fact at the start, and the chip says the answer used it.
+  const spoken = page.getByTestId('answer').filter({ hasText: 'Hi, I’m the mock Wren.' })
+  await expect(spoken).toContainText('Keeping in mind: I am vegetarian.', { timeout: 15_000 })
+  await expect(spoken.getByTestId('recall-chip')).toHaveText(['I am vegetarian.'])
+
+  // A question: Wren searches Memory (search_memory) and finds the note.
+  await composer(page).fill('Any dinner ideas with lentil curry?')
+  await scope(page).getByTestId('send').click()
+  const found = page.getByTestId('answer').filter({ hasText: 'From your notes:' })
+  await expect(found).toContainText('Dinner ideas: lentil curry and mushroom risotto.')
+  await expect(found.getByTestId('recall-chip')).toHaveText(['Dinner ideas: lentil curry and mushroom risotto.', 'I am vegetarian.'])
+
+  // "Remember that ...": saved (save_to_memory), shown under what was said, with Undo.
+  await composer(page).fill('Please remember that my sister’s name is Maya.')
+  await scope(page).getByTestId('send').click()
+  await expect(page.getByTestId('answer').filter({ hasText: 'Saved: my sister’s name is Maya.' })).toHaveCount(1)
+  const saved = page.getByTestId('memory-saved')
+  await expect(saved).toHaveCount(1)
+  await expect(saved).toContainText('Saved to Memory')
+  await expect(saved).toContainText('my sister’s name is Maya')
+  await expect(saved.getByTestId('memory-undo')).toBeVisible()
+  await noHorizontalScroll(page)
+
+  await scope(page).getByTestId('voice-end').click()
+  await expect(scope(page).getByTestId('voice-panel')).toBeHidden()
+
+  // Kept with the chat.
+  await page.reload()
+  await expect(page.getByTestId('answer').filter({ hasText: 'From your notes:' }).getByTestId('recall-chip')).toHaveCount(2)
+  await expect(page.getByTestId('memory-saved')).toContainText('my sister’s name is Maya')
+  await page.getByTestId('memory-undo').click()
+  await expect(page.getByTestId('memory-saved')).toContainText('Removed from Memory')
+  const notes = (await (await page.request.get('/api/memory?kind=note')).json()).memories as { text: string }[]
+  expect(notes.map((n) => n.text)).toEqual(['Dinner ideas: lentil curry and mushroom risotto.'])
+})

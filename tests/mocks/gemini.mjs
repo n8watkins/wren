@@ -18,7 +18,8 @@
 // Memory's calls: batchEmbedContents answers with tests/mocks/embedding.mjs,
 // and generateContent (JSON) reads a PDF (the text in its "(...) Tj" strings)
 // or picks facts: each sentence of the person's messages that says "I" or
-// "my" (at most 3); "mock:fail" anywhere fails. Asked which facts an answer
+// "my" (at most 3), except a "remember that ..." request, which voice's
+// save_to_memory already saved; "mock:fail" anywhere fails. Asked which facts an answer
 // used, it names each fact sharing a word of five letters or more with it.
 // It also stands in for Turnstile's siteverify (POST /siteverify), and for
 // Gemini Live's WebSocket (tests/mocks/live.mjs).
@@ -128,7 +129,7 @@ function pickFacts(text) {
   return own
     .split(/(?<=[.!?])\s+|\n+/)
     .map((s) => s.trim())
-    .filter((s) => /\b(i|i'm|my)\b/i.test(s))
+    .filter((s) => /\b(i|i'm|my)\b/i.test(s) && !/remember that/i.test(s))
     .slice(0, 3)
 }
 

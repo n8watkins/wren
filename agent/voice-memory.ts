@@ -1,4 +1,4 @@
-import { recallContext, type ChatMemory, type EngineFor } from './chat-memory'
+import { noteFrom, recallContext, type ChatMemory, type EngineFor } from './chat-memory'
 import type { ChatMessage } from './chats'
 import type { LiveTool } from './gemini'
 import type { VoiceMemoryPort } from './voice'
@@ -94,7 +94,7 @@ export class VoiceMemory implements VoiceMemoryPort {
 
   async save(text: string, at: { chatId: string; messageId: string | null } | null): Promise<{ output: unknown; marked?: string }> {
     if (!at) {
-      const added = await this.engineFor(this.from.userKey, this.from.ip).addNote(text.slice(0, MEMORY_LIMITS.noteChars))
+      const added = await this.engineFor(this.from.userKey, this.from.ip).addNote(noteFrom(text))
       if (!added.ok) throw new Error(added.code)
       return { output: { saved: true } }
     }
