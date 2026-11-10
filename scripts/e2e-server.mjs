@@ -7,6 +7,8 @@
 // guest cap is low, and the burst limits are raised so parallel tests from one
 // IP aren't throttled
 // (the limits themselves are Cloudflare's; the daily meter is tested as is).
+// --test-scheduled adds wrangler's /__scheduled, so the daily model check
+// (the cron) can run against the mocks; production has no such route.
 // E2E_SKIP_BUILD=1 reuses the last build; E2E_INSPECTOR_PORT picks wrangler's
 // inspector port, so test servers running side by side don't fight over 9229.
 import { execFileSync, spawn } from 'node:child_process'
@@ -64,7 +66,7 @@ run('npx', ['wrangler', 'd1', 'migrations', 'apply', 'wren', '--local', '-c', `$
 const inspector = process.env.E2E_INSPECTOR_PORT ? ['--inspector-port', process.env.E2E_INSPECTOR_PORT] : []
 const server = spawn(
   'npx',
-  ['wrangler', 'dev', '-c', `${dir}/wrangler.jsonc`, '--ip', host, '--port', port, '--persist-to', state, '--log-level', 'warn', ...inspector],
+  ['wrangler', 'dev', '-c', `${dir}/wrangler.jsonc`, '--ip', host, '--port', port, '--persist-to', state, '--log-level', 'warn', '--test-scheduled', ...inspector],
   { stdio: 'inherit' }
 )
 for (const signal of ['SIGINT', 'SIGTERM']) process.on(signal, () => server.kill(signal))

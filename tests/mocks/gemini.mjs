@@ -16,6 +16,7 @@
 //   the report writer  a report citing every source it was given; for
 //                      "mock:hostile" also a citation of a source that doesn't
 //                      exist and links to a page that wasn't read
+// The daily model check's one-word question ("Reply with exactly one word.") gets "ok".
 // Memory's calls: batchEmbedContents answers with tests/mocks/embedding.mjs,
 // and generateContent (JSON) reads a PDF (the text in its "(...) Tj" strings)
 // or picks facts: each sentence of the person's messages that says "I" or
@@ -100,6 +101,7 @@ function researchCall(res, body) {
       },
     })
   }
+  if (system.startsWith('Reply with exactly one word')) return answer(res, 'ok')
   if (system.startsWith('You plan web research')) {
     const question = prompt.replace(/^Question:\s*/, '')
     if (question.includes('mock:fail')) return json(res, 500, { error: { code: 500, message: 'internal', status: 'INTERNAL' } })

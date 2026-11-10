@@ -18,11 +18,19 @@ Settled: sign-in emails come from `wren@n8builds.dev`, and Wren lives at `wren.n
 
 - Typed chat onto the agent's WebSocket, with resumable streams (split out of phase 4 on 2026-11-10; voice already has its own socket).
 - Voice, once live: check a real session on wren.n8builds.dev (the mic needs https), and watch Gemini Live's per-minute cost against the 10-minute allowance.
-- Launch (next): portfolio card, build page on n8builds.dev, OpenPing watching `/api/health`.
+- Launch (next): portfolio card, build page on n8builds.dev, OpenPing watching `/api/health` with a JSON assertion that `status` is `"ok"` (a failed daily model check is `degraded` with HTTP 200, not a 503).
+- Research's Google Search grounding backup is being removed by owner decision (2026-11-10): Tavily is Wren's only search and the model gets no Google Search tool.
+  The coordinator removes it from the research engine (`agent/research.ts`, `agent/web-search.ts`, `searchWithGoogle` in `agent/gemini.ts`) in its own PR; the daily model check already doesn't call it.
+- After the daily model check's first deploy: the next day, check that `/api/health` shows `models` with a `ranAt` from 14:00 UTC.
+- What the first real runs of the daily model check found (2026-11-10, local, on the demo key):
+  Google Search grounding answered 429 (`demo_busy`) on both `gemini-3.5-flash-lite` and `gemini-3.1-flash-lite`, every time, while plain calls to the same models worked.
+  The lite models are slow and flaky: a one-word reply took 2 to 9 s from `gemini-3.5-flash-lite` (one 503 after 15 s) and 1 to 20 s from `gemini-3.1-flash-lite` (one 20 s timeout, one 503 on both tries), against chat's 20 s first-text window.
+  `gemini-embedding-2` (768 values), `gemini-3.8-live` (setup in under 0.6 s) and Tavily answered every time.
 
 ## Done
 
 - 2026-11-10: research in chat (phase 3): Research mode in the composer and "Research this" on answers, the run as a live saffron card with Stop that reattaches after a reload, the report and its sources landing in the chat as part of the conversation, "Save findings to memory", and which service searched.
+- 2026-11-10: daily real-model check (lane E): a Cron Trigger calls each model and search service once a day and `/api/health` reports the result, so OpenPing alerts when a model stops answering without spending model calls.
 - 2026-11-10: memory in chat (phase 2): Wren's facts with every message and recall by meaning, "From your Memory" chips, "Saved to Memory" with Undo, "Save to Memory" on messages, and meaning thresholds tuned on real gemini-embedding-2 searches.
 - 2026-11-10: voice (phase 4, lane A): Gemini Live (`gemini-3.8-live`) relayed by each person's agent over its own WebSocket, barge-in, transcripts saved in the chat, 10 minutes a day metered in seconds, your own key with no limit.
 - 2026-11-09: research engine and the Runs page (phase 3, lane B): runs in each person's agent, Tavily with Gemini Google Search as backup, safe fetching, cited reports.

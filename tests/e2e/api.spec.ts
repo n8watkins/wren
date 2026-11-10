@@ -39,7 +39,7 @@ test('health reports each feature without secrets', async ({ request }) => {
   expect(response.status()).toBe(200)
   const body = await response.json()
   expect(Object.keys(body.checks)).toEqual(
-    expect.arrayContaining(['database', 'agents', 'config', 'chat', 'signInEmail', 'signInGithub', 'voice', 'research', 'memory'])
+    expect.arrayContaining(['database', 'agents', 'config', 'chat', 'signInEmail', 'signInGithub', 'voice', 'research', 'memory', 'models'])
   )
   expect(body.checks.database.ok).toBe(true)
   expect(body.checks.agents.ok).toBe(true)
