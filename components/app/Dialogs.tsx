@@ -278,6 +278,19 @@ export function KeyDialog({
             </p>
           </div>
         ) : null}
+        {!current && (
+          <ol className="keyhow" aria-label="How to get a key" data-testid="key-how">
+            <li>
+              Open{' '}
+              <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener noreferrer">
+                Google AI Studio&rsquo;s API keys page
+              </a>{' '}
+              and sign in with a Google account.
+            </li>
+            <li>Choose Create API key and copy it.</li>
+            <li>Paste it below and save. It works at once.</li>
+          </ol>
+        )}
         <form className="stack" onSubmit={save}>
           <div className="field">
             <label htmlFor="gemini-key">{current ? 'Replace it' : 'Gemini API key'}</label>
@@ -312,19 +325,6 @@ export function KeyDialog({
           >
             Remove key
           </button>
-        )}
-        {!current && (
-          <ol className="keyhow" aria-label="How to get a key" data-testid="key-how">
-            <li>
-              Open{' '}
-              <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener noreferrer">
-                Google AI Studio&rsquo;s API keys page
-              </a>{' '}
-              and sign in with a Google account.
-            </li>
-            <li>Choose Create API key and copy it.</li>
-            <li>Paste it above and save. It works at once.</li>
-          </ol>
         )}
         <p className="fine">
           Your key stays in this browser: it is sent only with your own requests, and Wren never stores or logs it on the

@@ -596,7 +596,8 @@ export function WrenApp({ person, github, initialChats, initialUsage, guestSiteK
 
   const closeHow = () => {
     writeLocal(KEYS.seenHow, '1')
-    setModal(null)
+    // Closing it to open another dialog (its own-key link) leaves that one open.
+    setModal((current) => (current?.kind === 'key' ? current : null))
   }
 
   const explain = (id: ExplainerId) => setModal({ kind: 'explain', id })
