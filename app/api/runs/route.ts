@@ -1,6 +1,7 @@
 import { agentFor } from '@/lib/server/agent'
 import { HttpError, errorResponse, jsonResponse, readJson } from '@/lib/server/http'
 import { authed } from '@/lib/server/route'
+import { clientIp } from '@/lib/server/client-ip'
 import { researchRequest } from '@/lib/server/schemas'
 
 /** Your research runs, newest first. */
@@ -14,7 +15,7 @@ export const POST = authed('runs.start', async ({ env, session, request }) => {
   const parsed = researchRequest.safeParse(await readJson(request))
   if (!parsed.success) throw new HttpError('bad_request')
   const agent = await agentFor(env, session.userId)
-  const started = await agent.startResearch(parsed.data.question)
+  const started = await agent.startResearch(parsed.data.question, clientIp(request))
   if (!started.ok) return errorResponse(started.code)
   return jsonResponse({ run: started.run, usage: await agent.usage() }, { status: 201 })
 })

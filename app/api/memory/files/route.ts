@@ -2,6 +2,7 @@ import { agentFor } from '@/lib/server/agent'
 import { HttpError, errorResponse, jsonResponse, readBytes } from '@/lib/server/http'
 import { FILE_NAME_HEADER, fileName, userKeyFrom } from '@/lib/server/memory-schemas'
 import { authed } from '@/lib/server/route'
+import { clientIp } from '@/lib/server/client-ip'
 import { MEMORY_LIMITS } from '@/lib/memory'
 
 /**
@@ -20,6 +21,6 @@ export const POST = authed('memory.upload', async ({ env, session, request }) =>
   const key = userKeyFrom(request)
   const bytes = await readBytes(request, MEMORY_LIMITS.fileMaxBytes, 'memory_file_too_large')
   const agent = await agentFor(env, session.userId)
-  const result = await agent.memoryAddFile(parsed.data, bytes.buffer, key)
+  const result = await agent.memoryAddFile(parsed.data, bytes.buffer, key, clientIp(request))
   return result.ok ? jsonResponse({ memory: result.memory }, { status: 201 }) : errorResponse(result.code)
 })

@@ -117,6 +117,26 @@ describe('memoryAi', () => {
     await expect(bad.embed('x')).rejects.toEqual(new MemoryAiError('user_key_invalid'))
   })
 
+  it('stops at the per-network daily count too, giving the person’s unit back', async () => {
+    const sql = meterSql()
+    let left = 1
+    const given: number[] = []
+    const network = { take: async () => left-- > 0, giveBack: async () => void given.push(1) }
+    const ai = memoryAi({ sql, demoKey: 'test-demo-key', baseUrl, ...settings, network })
+    await ai.embed('one')
+    await expect(ai.embed('two')).rejects.toEqual(new MemoryAiError('memory_daily_limit'))
+    expect(used(sql, utcDay(), 'memory')).toBe(1)
+    const down = memoryAi({ sql, demoKey: 'test-demo-key', baseUrl, ...settings, model: 'down-model', network: { take: async () => true, giveBack: network.giveBack } })
+    await expect(down.json({ systemPrompt: 'p', parts: [{ text: 'x' }], schema: {} })).rejects.toEqual(new MemoryAiError('upstream_error'))
+    expect(given).toHaveLength(1)
+  })
+
+  it('never counts the person’s own key against the network', async () => {
+    const network = { take: async () => false, giveBack: async () => undefined }
+    const ai = memoryAi({ sql: meterSql(), userKey: 'own-key-0123456789abcdef', demoKey: 'test-demo-key', baseUrl, ...settings, network })
+    await expect(ai.embed('x')).resolves.toHaveLength(768)
+  })
+
   it('without any key, says the demo key is unavailable', async () => {
     await expect(memoryAi({ sql: meterSql(), baseUrl, ...settings }).embed('x')).rejects.toEqual(new MemoryAiError('demo_unavailable'))
   })

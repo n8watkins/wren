@@ -2,6 +2,7 @@ import { agentFor } from '@/lib/server/agent'
 import { HttpError, errorResponse, jsonResponse, readJson } from '@/lib/server/http'
 import { idFrom, memoryPatch, userKeyFrom } from '@/lib/server/memory-schemas'
 import { authed } from '@/lib/server/route'
+import { clientIp } from '@/lib/server/client-ip'
 
 /** Edit one of your memories. */
 export const PATCH = authed<{ id: string }>('memory.update', async ({ env, session, request }, params) => {
@@ -9,7 +10,7 @@ export const PATCH = authed<{ id: string }>('memory.update', async ({ env, sessi
   const parsed = memoryPatch.safeParse(await readJson(request))
   if (!parsed.success) throw new HttpError('bad_request')
   const agent = await agentFor(env, session.userId)
-  const result = await agent.memoryUpdate(id, parsed.data, userKeyFrom(request))
+  const result = await agent.memoryUpdate(id, parsed.data, userKeyFrom(request), clientIp(request))
   return result.ok ? jsonResponse({ memory: result.memory }) : errorResponse(result.code)
 })
 

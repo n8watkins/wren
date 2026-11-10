@@ -20,6 +20,8 @@ export function memoryAi(options: {
   model: string
   fallbackModel?: string
   baseUrl?: string
+  /** The per-network daily count for demo-key calls (DAILY_IP_LIMITS.memoryAiCalls). */
+  network?: { take(): Promise<boolean>; giveBack(): Promise<void> }
 }): MemoryAi {
   const key = chooseKey(options.userKey, options.demoKey)
   const metered = async <T>(call: (key: { apiKey: string; keySource: 'demo' | 'user' }) => Promise<T>): Promise<T> => {
@@ -28,10 +30,17 @@ export function memoryAi(options: {
     if (key.keySource === 'demo' && !tryTake(options.sql, day, 'memory', MEMORY_LIMITS.dailyAiCalls)) {
       throw new MemoryAiError('memory_daily_limit')
     }
+    if (key.keySource === 'demo' && options.network && !(await options.network.take())) {
+      giveBack(options.sql, day, 'memory')
+      throw new MemoryAiError('memory_daily_limit')
+    }
     try {
       return await call(key)
     } catch (error) {
-      if (key.keySource === 'demo') giveBack(options.sql, day, 'memory')
+      if (key.keySource === 'demo') {
+        giveBack(options.sql, day, 'memory')
+        await options.network?.giveBack()
+      }
       throw new MemoryAiError(error instanceof GeminiError ? error.code : 'upstream_error')
     }
   }

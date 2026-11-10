@@ -254,8 +254,13 @@ export class WrenAgent extends Agent<Cloudflare.Env> {
     return this.researchRuns
   }
 
-  startResearch(question: string) {
-    return this.research.start(question)
+  /** Starts a run, behind the per-network daily count too (DAILY_IP_LIMITS.research). */
+  async startResearch(question: string, ip: string) {
+    const network = this.env.DAILY_COUNTER.getByName(`ip:${ip}`)
+    if (!(await network.take('research', DAILY_IP_LIMITS.research))) return { ok: false as const, code: 'research_daily_limit_ip' as const }
+    const started = await this.research.start(question)
+    if (!started.ok) await network.giveBack('research')
+    return started
   }
 
   listResearch() {
@@ -292,7 +297,7 @@ export class WrenAgent extends Agent<Cloudflare.Env> {
   // ---- Memory (agent/memory.ts): the person's library. Chat doesn't call it yet. ----
 
   /** This person's memory engine, with the request's Gemini key (never stored). */
-  private memory(userKey?: string): MemoryEngine {
+  private memory(userKey?: string, ip?: string): MemoryEngine {
     const sql = this.db
     // The agent's id names the person's Vectorize namespace and R2 prefix.
     const namespace = this.ctx.id.toString()
@@ -310,28 +315,34 @@ export class WrenAgent extends Agent<Cloudflare.Env> {
         model: this.env.GEMINI_MODEL,
         fallbackModel: this.env.GEMINI_FALLBACK_MODEL || undefined,
         baseUrl: optionalSetting(this.env, 'GEMINI_BASE_URL'),
+        network: ip ? this.networkCount(ip, 'memoryAiCalls', DAILY_IP_LIMITS.memoryAiCalls) : undefined,
       }),
     })
   }
 
-  memoryList(request: { query?: string; kind?: MemoryKind; userKey?: string }): Promise<MemoryList> {
-    return this.memory(request.userKey).list(request)
+  private networkCount(ip: string, kind: string, limit: number) {
+    const counter = this.env.DAILY_COUNTER.getByName(`ip:${ip}`)
+    return { take: () => counter.take(kind, limit), giveBack: () => counter.giveBack(kind) }
   }
 
-  memoryAddNote(text: string, userKey?: string): Promise<MemoryResult<{ memory: Memory }>> {
-    return this.memory(userKey).addNote(text)
+  memoryList(request: { query?: string; kind?: MemoryKind; userKey?: string; ip: string }): Promise<MemoryList> {
+    return this.memory(request.userKey, request.ip).list(request)
   }
 
-  memoryAddLink(link: { url: string; title: string }, userKey?: string): Promise<MemoryResult<{ memory: Memory }>> {
-    return this.memory(userKey).addLink(link.url, link.title)
+  memoryAddNote(text: string, userKey: string | undefined, ip: string): Promise<MemoryResult<{ memory: Memory }>> {
+    return this.memory(userKey, ip).addNote(text)
   }
 
-  memoryAddFile(name: string, bytes: ArrayBuffer, userKey?: string): Promise<MemoryResult<{ memory: Memory }>> {
-    return this.memory(userKey).addFile(name, bytes)
+  memoryAddLink(link: { url: string; title: string }, userKey: string | undefined, ip: string): Promise<MemoryResult<{ memory: Memory }>> {
+    return this.memory(userKey, ip).addLink(link.url, link.title)
   }
 
-  memoryUpdate(id: string, patch: { title?: string; text?: string; url?: string }, userKey?: string): Promise<MemoryResult<{ memory: Memory }>> {
-    return this.memory(userKey).update(id, patch)
+  memoryAddFile(name: string, bytes: ArrayBuffer, userKey: string | undefined, ip: string): Promise<MemoryResult<{ memory: Memory }>> {
+    return this.memory(userKey, ip).addFile(name, bytes)
+  }
+
+  memoryUpdate(id: string, patch: { title?: string; text?: string; url?: string }, userKey: string | undefined, ip: string): Promise<MemoryResult<{ memory: Memory }>> {
+    return this.memory(userKey, ip).update(id, patch)
   }
 
   memoryDelete(id: string): Promise<boolean> {
