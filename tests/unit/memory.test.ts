@@ -7,7 +7,7 @@ import { mockEmbedding } from '../mocks/embedding.mjs'
 import { memorySql } from '../support/sql'
 
 /** A stand-in for Gemini: the mock embeddings, and a scripted JSON reply. */
-function fakeAi(options: { facts?: string[]; failWith?: string; pdfText?: string } = {}) {
+function fakeAi(options: { facts?: (string | { text: string; replaces?: string })[]; failWith?: string; pdfText?: string } = {}) {
   const calls: { kind: 'embed' | 'json'; text: string }[] = []
   const ai: MemoryAi = {
     async embed(text) {
@@ -284,21 +284,42 @@ describe('the extractor', () => {
     expect(await memory.rememberFacts([])).toEqual([])
   })
 
-  it('updates a near-duplicate fact instead of adding a second copy', async () => {
+  it('shows the extractor the closest saved memories, and updates the one it says a fact replaces', async () => {
     const first = fakeAi({ facts: ['Prefers vegetarian recipes'] })
     const { memory, sql, vectors } = engine({ ai: first.ai })
     await memory.rememberFacts(said('I am vegetarian'))
+    const second = fakeAi({ facts: [{ text: 'Eats fish now, but no meat.', replaces: 'k1' }] })
+    const again = new MemoryEngine({ sql, vectors, files: fakeFiles().files, filePrefix: PREFIX, ai: second.ai })
+    const saved = await again.rememberFacts(said('Prefers vegetarian recipes, eats fish'))
+    const prompt = second.calls.find((c) => c.kind === 'json')?.text ?? ''
+    expect(prompt).toContain('[k1] Prefers vegetarian recipes')
+    expect(saved).toHaveLength(1)
+    expect(saved[0]).toMatchObject({ action: 'updated', previousText: 'Prefers vegetarian recipes', memory: { text: 'Eats fish now, but no meat.' } })
+    expect(listMemories(sql)).toHaveLength(1)
+  })
+
+  it('adds a related but different fact instead of overwriting the close one', async () => {
+    const { memory, sql, vectors } = engine({ ai: fakeAi({ facts: ['Grew up in Minnesota.'] }).ai })
+    await memory.rememberFacts(said('I grew up in Minnesota'))
+    const again = new MemoryEngine({ sql, vectors, files: fakeFiles().files, filePrefix: PREFIX, ai: fakeAi({ facts: [{ text: 'Lives in Minneapolis.', replaces: '' }] }).ai })
+    const saved = await again.rememberFacts(said('I live in Minneapolis'))
+    expect(saved.map((s) => s.action)).toEqual(['added'])
+    expect(listMemories(sql).map((m) => m.text).sort()).toEqual(['Grew up in Minnesota.', 'Lives in Minneapolis.'])
+  })
+
+  it('ignores a replaces id it never showed, and never rewrites a note the person wrote', async () => {
+    const { memory, sql, vectors } = engine({ ai: fakeAi().ai })
+    await memory.addNote('Prefers vegetarian recipes')
     const again = new MemoryEngine({
       sql,
       vectors,
       files: fakeFiles().files,
       filePrefix: PREFIX,
-      ai: fakeAi({ facts: ['Prefers vegetarian recipe', 'prefers vegetarian recipes!'] }).ai,
+      ai: fakeAi({ facts: [{ text: 'Is vegan now.', replaces: 'k1' }, { text: 'Rides an e-bike.', replaces: 'k9' }] }).ai,
     })
-    const saved = await again.rememberFacts(said('Still vegetarian'))
-    expect(saved).toHaveLength(1)
-    expect(saved[0]).toMatchObject({ action: 'updated', previousText: 'Prefers vegetarian recipes', memory: { text: 'Prefers vegetarian recipe' } })
-    expect(listMemories(sql)).toHaveLength(1)
+    const saved = await again.rememberFacts(said('Prefers vegetarian recipes; vegan now, e-bike'))
+    expect(saved.map((s) => [s.action, s.memory.text])).toEqual([['added', 'Rides an e-bike.']])
+    expect(listMemories(sql).find((m) => m.kind === 'note')?.text).toBe('Prefers vegetarian recipes')
   })
 
   it('leaves a note the person wrote alone when a fact repeats it', async () => {
@@ -319,7 +340,14 @@ describe('the extractor', () => {
   it('keeps only clean, short, distinct facts from the reply', () => {
     expect(cleanFacts(null)).toEqual([])
     expect(cleanFacts({ facts: 'not a list' })).toEqual([])
-    expect(cleanFacts({ facts: [' A  b ', 'a b', 3, '', 'x'.repeat(400)] })).toEqual(['A b', 'x'.repeat(MEMORY_LIMITS.factChars)])
+    expect(cleanFacts({ facts: [' A  b ', 'a b', 3, '', 'x'.repeat(400)] })).toEqual([
+      { text: 'A b', replaces: null },
+      { text: 'x'.repeat(MEMORY_LIMITS.factChars), replaces: null },
+    ])
+    expect(cleanFacts({ facts: [{ text: 'New fact.', replaces: ' k2 ' }, { text: 'Other.', replaces: 'mem-123' }, { replaces: 'k1' }] })).toEqual([
+      { text: 'New fact.', replaces: 'k2' },
+      { text: 'Other.', replaces: null },
+    ])
   })
 })
 

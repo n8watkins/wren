@@ -24,7 +24,17 @@ export function createAuth(env: CloudflareEnv) {
     emailAndPassword: { enabled: false },
     socialProviders:
       githubId && githubSecret
-        ? { github: { clientId: githubId, clientSecret: githubSecret, scope: ['read:user', 'user:email'] } }
+        ? {
+            github: {
+              clientId: githubId,
+              clientSecret: githubSecret,
+              scope: ['read:user', 'user:email'],
+              // Each GitHub sign-in refreshes the name (GitHub's display name,
+              // else the username). An account first made with an email link has
+              // no name, and linking GitHub later doesn't add one otherwise.
+              overrideUserInfoOnSignIn: true,
+            },
+          }
         : {},
     plugins: [
       magicLink({
@@ -47,7 +57,29 @@ export function createAuth(env: CloudflareEnv) {
       ipAddress: { disableIpTracking: true },
     },
     telemetry: { enabled: false },
+    databaseHooks: {
+      user: {
+        update: {
+          before: async (user, context) => {
+            const data = oauthNameOnly(user, context?.path)
+            // Nothing left to change: skip the update rather than run an empty one.
+            return Object.keys(data).length ? { data } : false
+          },
+        },
+      },
+    },
   })
+}
+
+/**
+ * What a sign-in with GitHub may change on an existing user: the name only.
+ * The email they sign in with never changes behind their back (Better Auth's
+ * override would copy GitHub's primary email), and the avatar isn't used.
+ */
+export function oauthNameOnly<T extends Record<string, unknown>>(user: T, path: string | undefined): Partial<T> {
+  if (!path?.startsWith('/callback')) return user
+  const { name } = user
+  return (typeof name === 'string' && name.trim() ? { name: name.trim() } : {}) as Partial<T>
 }
 
 /** Which sign-in methods this deployment can offer. */
