@@ -9,6 +9,8 @@ const SESSION_ROUTES: [string, string][] = [
   ['GET', '/api/chats'],
   ['GET', '/api/chats/00000000-0000-4000-8000-000000000000'],
   ['DELETE', '/api/chats/00000000-0000-4000-8000-000000000000'],
+  ['POST', '/api/chats/00000000-0000-4000-8000-000000000000/messages/00000000-0000-4000-8000-000000000000/save'],
+  ['POST', '/api/chats/00000000-0000-4000-8000-000000000000/saves/00000000-0000-4000-8000-000000000000/undo'],
   ['GET', '/api/usage'],
   ['GET', '/api/runs'],
   ['POST', '/api/runs'],

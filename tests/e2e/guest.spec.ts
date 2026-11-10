@@ -15,6 +15,10 @@ test('a guest chats after the human check; the chat stays in this tab only', asy
   const answer = page.getByTestId('answer').last()
   await expect(answer).toContainText('You said: "Hello from a guest"', { timeout: 20_000 })
   await expect(answer).toHaveAttribute('data-status', 'done')
+  // Guests get no memory: no Save to Memory, no saves, no chips.
+  await expect(page.getByTestId('save-to-memory')).toHaveCount(0)
+  await expect(page.getByTestId('memory-saved')).toHaveCount(0)
+  await expect(page.getByTestId('recall')).toHaveCount(0)
   await expect(page).toHaveURL(/\/$/)
   await expect(await meterChat(page)).toHaveText('1/5')
   if (isPhone(page)) await page.getByTestId('title-menu').click()

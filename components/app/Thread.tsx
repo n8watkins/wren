@@ -2,13 +2,17 @@
 
 import { useEffect, useRef, useState } from 'react'
 import type { ChatMessage } from '@/agent/chats'
+import type { RecalledMemory } from '@/lib/memory'
 import { Icon } from '../Icons'
 import { Markdown } from '../Markdown'
 import { WrenMark } from '../WrenMark'
+import { RecallChips, SaveToMemory, SavedLines, type ThreadMemory } from './ChatMemory'
 
 export interface StreamingAnswer {
   chatId: string | null
   text: string
+  /** The memories Wren recalled for this answer (signed in). */
+  recalled?: RecalledMemory[]
 }
 
 function Answer({
@@ -16,16 +20,19 @@ function Answer({
   streaming,
   isLast,
   busy,
+  memory,
   onRegenerate,
   onExplain,
 }: {
-  message: { content: string; status: ChatMessage['status'] | 'streaming' }
+  message: Pick<ChatMessage, 'id' | 'content' | 'memory'> & { status: ChatMessage['status'] | 'streaming'; recalled?: RecalledMemory[] }
   streaming: boolean
   isLast: boolean
   busy: boolean
+  memory: ThreadMemory | null
   onRegenerate: () => void
   onExplain: (id: 'research' | 'memory') => void
 }) {
+  const recalled = message.recalled ?? message.memory?.recalled
   const [copied, setCopied] = useState(false)
   const copy = async () => {
     try {
@@ -48,6 +55,8 @@ function Answer({
         {message.content ? <Markdown text={message.content} /> : null}
         {streaming && <span className="caret" aria-hidden="true" />}
       </div>
+      {/* Under the answer, where reading ends: chips that arrive after it don't move the text. */}
+      {memory && recalled && recalled.length > 0 && <RecallChips memories={recalled} />}
       {!streaming && (
         <div className="acts">
           <button type="button" onClick={copy}>
@@ -64,10 +73,7 @@ function Answer({
             <Icon name="res" />
             Research this
           </button>
-          <button type="button" className="mem" onClick={() => onExplain('memory')}>
-            <Icon name="mem" />
-            Save to memory
-          </button>
+          {memory && <SaveToMemory messageId={message.id} savedAs={message.memory?.savedAs} memory={memory} />}
         </div>
       )}
     </div>
@@ -78,12 +84,15 @@ export function Thread({
   messages,
   streaming,
   busy,
+  memory,
   onRegenerate,
   onExplain,
 }: {
   messages: ChatMessage[]
   streaming: StreamingAnswer | null
   busy: boolean
+  /** Memory in chat; null for guests. */
+  memory: ThreadMemory | null
   onRegenerate: () => void
   onExplain: (id: 'research' | 'memory') => void
 }) {
@@ -109,8 +118,18 @@ export function Thread({
       <div className="col" aria-live="polite" aria-busy={streaming ? true : undefined}>
         {messages.map((message) =>
           message.role === 'user' ? (
-            <div className="u" key={message.id} data-testid="user-message">
-              {message.content}
+            <div className="uturn" key={message.id}>
+              <div className="urow">
+                {memory && !message.id.startsWith('pending-') && (
+                  <SaveToMemory messageId={message.id} savedAs={message.memory?.savedAs} memory={memory} compact />
+                )}
+                <div className="u" data-testid="user-message">
+                  {message.content}
+                </div>
+              </div>
+              {memory && message.memory?.saves && message.memory.saves.length > 0 && (
+                <SavedLines saves={message.memory.saves} memory={memory} />
+              )}
             </div>
           ) : (
             <Answer
@@ -119,6 +138,7 @@ export function Thread({
               streaming={false}
               isLast={!streaming && message === lastModel && messages.at(-1) === message}
               busy={busy}
+              memory={memory}
               onRegenerate={onRegenerate}
               onExplain={onExplain}
             />
@@ -126,10 +146,11 @@ export function Thread({
         )}
         {streaming && (
           <Answer
-            message={{ content: streaming.text, status: 'streaming' }}
+            message={{ id: 'streaming', content: streaming.text, status: 'streaming', recalled: streaming.recalled }}
             streaming
             isLast={false}
             busy
+            memory={memory}
             onRegenerate={onRegenerate}
             onExplain={onExplain}
           />
