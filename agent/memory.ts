@@ -449,6 +449,7 @@ export class MemoryEngine {
 
   /** The person's memories closest to some text, best first; none when meaning search is unavailable. */
   private async knownFor(text: string): Promise<Memory[]> {
+    if (this.usage().count === 0) return []
     try {
       const vector = await this.deps.ai.embed(queryText(text.slice(0, 4_000)))
       const matches = await this.deps.vectors.query(vector, KNOWN_FOR_EXTRACTOR)

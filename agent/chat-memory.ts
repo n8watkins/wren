@@ -32,7 +32,7 @@ type Row = {
   m_file_name: string | null
 }
 
-export function createMessageMemoryTable(sql: Sql): void {
+function createMessageMemoryTable(sql: Sql): void {
   createMemoryTables(sql)
   sql.exec(`CREATE TABLE IF NOT EXISTS message_memory (
     id TEXT PRIMARY KEY,
