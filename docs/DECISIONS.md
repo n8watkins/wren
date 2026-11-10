@@ -53,9 +53,16 @@ Read this before changing product, design or workflow, and add every new decisio
   A guest (no account) gets typed chat only, 5 messages a day, and nothing is saved past the tab: the chat lives in the tab's sessionStorage and comes with each message, size-capped, and the server stores only the counts.
   Signed in: 50 messages, 10 voice minutes and 3 research runs a day, with chats saved.
   The UI says what signing in unlocks: "Sign in for 10x more messages, voice, research and memory".
-  Protection: a Cloudflare Turnstile check (managed, interaction-only) before a guest's first message; a signed, HttpOnly guest cookie (HMAC over a random id and its expiry); limits keyed on the cookie and on CF-Connecting-IP (15 guest messages per network a day, so many cookies can't multiply it); and a site-wide cap of 500 guest messages a day (`GUEST_SITE_DAILY_CAP`) in a Durable Object counter, past which guests are told "Guest messages are used up for today; sign in to keep going".
+  Protection: a Cloudflare Turnstile check (managed, interaction-only) that runs in the background as the page loads, not before a guest's first message (owner, 2026-11-10, below); a signed, HttpOnly guest cookie (HMAC over a random id and its expiry); limits keyed on the cookie and on CF-Connecting-IP (15 guest messages per network a day, so many cookies can't multiply it); and a site-wide cap of 500 guest messages a day (`GUEST_SITE_DAILY_CAP`) in a Durable Object counter, past which guests are told "Guest messages are used up for today; sign in to keep going".
   Turnstile tokens are checked server-side in Wren's own Worker (siteverify), so no separate verify Worker is needed.
   The widget "Wren guest chat" (managed, wren.n8builds.dev) was created through the API; its secret is a Worker secret and was never written to disk.
+- **The guest human check runs on page load, in the background** (owner, 2026-11-10; it used to run when a guest sent their first message, after they had typed).
+  When a guest without a guest cookie opens Wren, the page renders the Turnstile widget at once and trades its token for the guest cookie (`/api/guest/start`, siteverify on the server as before), so the cookie is there before they send and nobody is interrupted after typing (`components/app/WrenApp.tsx`, `lib/client/turnstile.ts`).
+  The widget stays in managed mode with "interaction-only" appearance: most visitors see nothing, and when Cloudflare is unsure a small challenge appears above the composer at load.
+  Invisible mode was considered and not used, because it can't offer that challenge: an unsure check would simply fail.
+  A token is single use and lasts 300 s, so it is used the moment it arrives and never kept or refreshed; the cookie it buys lasts 24 hours.
+  A send while the check is still running waits for it; if the check failed or the cookie has expired since, the send runs it again (the old path), and only then can a challenge show after typing.
+  Signed-in people and guests who already have the cookie never load Turnstile; pre-clearance isn't used, as Wren checks the token itself rather than relying on a zone's WAF.
 - **Sign-in emails** go through Cloudflare Email Service from `wren@n8builds.dev` (owner confirmed, 2026-11-09), the domain already onboarded for sending (no API key).
   Links expire after 10 minutes, work once, and are stored hashed.
 

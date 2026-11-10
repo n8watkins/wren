@@ -89,8 +89,21 @@ export interface GuestSendOptions {
   history: { role: 'user' | 'model'; text: string }[]
   userKey?: string | null
   signal: AbortSignal
-  /** Runs the human check and returns a Turnstile token, when the server asks for one. */
-  humanCheck: () => Promise<string>
+  /**
+   * Makes sure this browser has a guest session (the human check, then
+   * /api/guest/start), when the server says it has none. Usually done in the
+   * background on page load already (components/app/WrenApp.tsx).
+   */
+  startGuest: () => Promise<void>
+}
+
+/** Trades a Turnstile token for the signed guest cookie. */
+export async function startGuestSession(token: string): Promise<void> {
+  await request<{ ok: true }>('/api/guest/start', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ token }),
+  })
 }
 
 async function postGuest(options: GuestSendOptions): Promise<Response> {
@@ -110,24 +123,15 @@ async function postGuest(options: GuestSendOptions): Promise<Response> {
 }
 
 /**
- * A guest's message. Without a guest cookie the server answers
- * guest_required: the human check runs, /api/guest/start sets the cookie, and
- * the message is sent once more.
+ * A guest's message. The guest session normally exists already (started in
+ * the background on page load); if the server still answers guest_required
+ * (the cookie expired, or the background check failed), the session is
+ * started now and the message is sent once more.
  */
 export async function* sendGuestMessage(options: GuestSendOptions): AsyncGenerator<ChatStreamEvent> {
   let response = await postGuest(options)
   if (response.status === 401) {
-    let token: string
-    try {
-      token = await options.humanCheck()
-    } catch {
-      throw new ApiError('turnstile_failed', errorMessage('turnstile_failed'))
-    }
-    await request<{ ok: true }>('/api/guest/start', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ token }),
-    })
+    await options.startGuest()
     response = await postGuest(options)
   }
   if (!response.ok || !response.body) throw await failure(response)
