@@ -63,7 +63,9 @@ Read this before changing product, design or workflow, and add every new decisio
   Closing the tab or pressing Stop ends the answer and keeps what was written.
   Moving typed chat onto the agent's WebSocket, with resumable streams, is a later step of its own (2026-11-10).
 - **Gemini** through `@google/genai`: `gemini-3.5-flash-lite`, with `gemini-3.1-flash-lite` as the backup (owner, 2026-11-09), set in `wrangler.jsonc` (`GEMINI_MODEL`, `GEMINI_FALLBACK_MODEL`).
-  The backup is tried once when the first model fails or sends no text within 20 s; a rejected key is never retried, and an answer that already started is never restarted (`agent/gemini.ts`).
+  The backup is tried once when the first model fails or sends no text within 10 s; a rejected key is never retried, and an answer that already started is never restarted (`agent/gemini.ts`).
+  The 10 s wait (owner, 2026-11-10; it was 20 s) comes from the daily model check's first real runs: `gemini-3.5-flash-lite` started a reply in 2 to 9 s when it was working, so 10 s clears every normal start, while a stalled answer switches to `gemini-3.1-flash-lite` 10 s sooner.
+  The last model tried (the backup, or the only model) keeps 20 s, because there is nothing left to switch to and `gemini-3.1-flash-lite` took up to 20 s in the same runs.
   It replaced `gemini-3.8-flash`, which stopped answering on the live site (no response within 40 s) while both lite models answered in about a second.
 - **The demo budget**: 50 messages, 10 voice minutes and 3 research runs per person per day, reset at midnight UTC (owner placeholders, 2026-11-09), counted in the person's agent, plus 150 messages per IP per day (`lib/limits.ts`).
   Burst limits per user and per IP use Workers rate limiting.

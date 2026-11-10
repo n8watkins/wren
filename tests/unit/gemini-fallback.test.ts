@@ -1,11 +1,12 @@
 import { createServer, type Server } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { GeminiError, streamReply, type StreamReplyOptions } from '../../agent/gemini'
+import { FIRST_TEXT_MS, GeminiError, streamReply, type StreamReplyOptions } from '../../agent/gemini'
 
 // A stand-in for Gemini's streamGenerateContent. The model name decides the answer:
 // "ok-*" streams two chunks, "silent-*" never answers, "down-*" fails with 500,
-// "badkey-*" rejects the key, "half-*" sends one chunk and then breaks.
+// "badkey-*" rejects the key, "half-*" sends one chunk and then breaks,
+// "slow-*" answers after 250 ms (between the two waits below).
 const calls: string[] = []
 let server: Server
 let baseUrl = ''
@@ -26,6 +27,12 @@ beforeAll(async () => {
       if (model.startsWith('badkey-')) {
         res.writeHead(400, { 'Content-Type': 'application/json' })
         return res.end(JSON.stringify({ error: { code: 400, message: 'API key not valid.', status: 'INVALID_ARGUMENT' } }))
+      }
+      if (model.startsWith('slow-')) {
+        return setTimeout(() => {
+          res.writeHead(200, { 'Content-Type': 'text/event-stream' })
+          res.end(chunk(`${model} says hi`))
+        }, 250)
       }
       res.writeHead(200, { 'Content-Type': 'text/event-stream' })
       if (model.startsWith('half-')) {
@@ -51,7 +58,8 @@ function options(model: string, fallbackModel?: string): StreamReplyOptions {
     keySource: 'demo',
     model,
     fallbackModel,
-    firstTextMs: 300,
+    // The real waits are 10 s before the fallback and 20 s for the last model.
+    firstTextMs: { beforeFallback: 100, last: 600 },
     systemPrompt: 'You are Wren.',
     history: [{ role: 'user', text: 'hi' }],
     signal: new AbortController().signal,
@@ -76,6 +84,20 @@ describe('chat model fallback', () => {
     calls.length = 0
     expect(await answer(options('silent-main', 'ok-backup'))).toBe('ok-backup says hi')
     expect(calls).toEqual(['silent-main', 'ok-backup'])
+  })
+
+  it('gives the first model the shorter wait and the last model the longer one', async () => {
+    calls.length = 0
+    // Slower than the first model's wait: chat switches.
+    expect(await answer(options('slow-main', 'ok-backup'))).toBe('ok-backup says hi')
+    // The fallback, and a model with no fallback, may take longer.
+    expect(await answer(options('silent-main', 'slow-backup'))).toBe('slow-backup says hi')
+    expect(await answer(options('slow-main'))).toBe('slow-main says hi')
+    expect(calls).toEqual(['slow-main', 'ok-backup', 'silent-main', 'slow-backup', 'slow-main'])
+  })
+
+  it('keeps the real waits at 10 s before the fallback and 20 s for the last model', () => {
+    expect(FIRST_TEXT_MS).toEqual({ beforeFallback: 10_000, last: 20_000 })
   })
 
   it('moves to the fallback when the main model fails before any text', async () => {

@@ -37,8 +37,8 @@ export interface StreamReplyOptions {
   model: string
   /** Tried once when `model` fails or stays silent before any text. */
   fallbackModel?: string
-  /** How long a model may take to send its first text before it counts as failed. */
-  firstTextMs?: number
+  /** How long a model may take to send its first text before it counts as failed (tests shorten it). */
+  firstTextMs?: FirstTextWait
   systemPrompt: string
   history: { role: Role; text: string }[]
   signal: AbortSignal
@@ -57,8 +57,23 @@ export function classifyGeminiError(error: unknown, keySource: KeySource): Gemin
   return new GeminiError('upstream_error', status)
 }
 
-/** A model that has sent no text by then is treated as down (some never answer at all). */
-const FIRST_TEXT_MS = 20_000
+/**
+ * How long a model may take to send its first text before it is treated as
+ * down (some never answer at all). The first model gets 10 s before chat
+ * switches to the fallback: the daily model check measured normal starts of 2
+ * to 9 s on gemini-3.5-flash-lite, so 10 s clears every one of them while a
+ * stalled answer moves on 10 s sooner than it used to. The last model (the
+ * fallback, or the only one) keeps 20 s, as there is nothing left to switch to
+ * and gemini-3.1-flash-lite took up to 20 s in the same check.
+ */
+export interface FirstTextWait {
+  /** The first model, when a fallback is there to take over. */
+  beforeFallback: number
+  /** The last model tried. */
+  last: number
+}
+
+export const FIRST_TEXT_MS: FirstTextWait = { beforeFallback: 10_000, last: 20_000 }
 
 /** Failures another model might not have: outages, silence, per-model quota. A bad key is a bad key everywhere. */
 function worthAnotherModel(error: GeminiError): boolean {
@@ -73,10 +88,11 @@ export async function* streamReply(options: StreamReplyOptions): AsyncGenerator<
   const models = [options.model]
   if (options.fallbackModel && options.fallbackModel !== options.model) models.push(options.fallbackModel)
   let failure: GeminiError | undefined
-  for (const model of models) {
+  const wait = options.firstTextMs ?? FIRST_TEXT_MS
+  for (const [i, model] of models.entries()) {
     let sentText = false
     try {
-      for await (const text of streamModel(options, model)) {
+      for await (const text of streamModel(options, model, i < models.length - 1 ? wait.beforeFallback : wait.last)) {
         sentText = true
         yield text
       }
@@ -92,7 +108,7 @@ export async function* streamReply(options: StreamReplyOptions): AsyncGenerator<
 }
 
 /** One model's stream. Its own abort covers both Stop and a model that stays silent. */
-async function* streamModel(options: StreamReplyOptions, model: string): AsyncGenerator<string> {
+async function* streamModel(options: StreamReplyOptions, model: string, firstTextMs: number): AsyncGenerator<string> {
   const attempt = new AbortController()
   const stop = () => attempt.abort()
   options.signal.addEventListener('abort', stop)
@@ -100,7 +116,7 @@ async function* streamModel(options: StreamReplyOptions, model: string): AsyncGe
   const timer = setTimeout(() => {
     silent = true
     attempt.abort()
-  }, options.firstTextMs ?? FIRST_TEXT_MS)
+  }, firstTextMs)
   const fail = (error: unknown) => (silent ? new GeminiError('upstream_error', 504) : classifyGeminiError(error, options.keySource))
   try {
     const ai = new GoogleGenAI({
