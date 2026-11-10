@@ -1498,6 +1498,22 @@ svg.wren.talking .head {
   border: 1px solid color-mix(in srgb, var(--ember) 24%, transparent);
   min-width: 0;
 }
+.vdemo {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: -4px 2px 10px;
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--text-2);
+}
+.vdemo svg {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  margin-top: 2px;
+  color: var(--ember);
+}
 .voice .vmark {
   width: 40px;
   height: 40px;

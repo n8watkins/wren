@@ -19,6 +19,9 @@ export function regionNudge(region: Region): string | null {
   return `You're visiting from ${region.name}. Google's terms reserve Gemini's free tier from apps used in the UK, the EU/EEA and Switzerland, so please use Wren with your own Gemini key there.`
 }
 
+/** The same reminder in the listening view, for what is said out loud. */
+export const VOICE_REMINDER = "Free demo on Gemini's free tier: please don't say personal details (names, contact info, health, finances, anything private). For real use, add your own Gemini key."
+
 /** The same reminder, short, where you save to Memory. */
 export const MEMORY_REMINDER = "Free demo: don't save personal details (names, contact info, health, finances, anything private). For real use, add your own Gemini key."
 
