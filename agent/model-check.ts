@@ -1,4 +1,4 @@
-import { GeminiError, connectLive, embedText, generateText, searchWithGoogle, type LiveEvents } from './gemini'
+import { GeminiError, connectLive, embedText, generateText, type LiveEvents } from './gemini'
 import type { Sql } from './sql'
 import { TavilyError, tavilySearch } from './web-search'
 import { EMBEDDING_DIMENSIONS } from '../lib/memory'
@@ -101,15 +101,6 @@ export function probesFor(env: CloudflareEnv): Probe[] {
           NO_EVENTS
         )
         session.close()
-      },
-    },
-    {
-      name: 'googleSearch',
-      target: env.GEMINI_MODEL,
-      skip: noGeminiKey,
-      run: async (signal) => {
-        const pages = await searchWithGoogle({ ...gemini, model: env.GEMINI_MODEL, query: 'Cloudflare Workers news this week', signal, timeoutMs: PROBE_MS })
-        if (!pages.length) throw new ProbeFailure('no_sources')
       },
     },
     {

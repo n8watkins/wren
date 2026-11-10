@@ -10,7 +10,7 @@ import { memorySql } from '../support/sql'
 
 // A fake Gemini API and Tavily on one port. The model name decides Gemini's
 // answer: "ok-*" answers, "down-*" fails with 500, "silent-*" never answers,
-// "empty-*" answers with no text, "nosrc-*" searches but finds nothing;
+// "empty-*" answers with no text;
 // "embed-768" embeds at 768 dimensions and "embed-3" at the wrong size.
 // Tavily: the key "spent" is out of credits (432), anything else finds one page.
 const seen: { path: string; body: Record<string, unknown>; key?: string }[] = []
@@ -40,12 +40,8 @@ beforeAll(async () => {
       }
       if (model.startsWith('silent-')) return
       if (model.startsWith('down-')) return json(500, { error: { code: 500, message: 'internal', status: 'INTERNAL' } })
-      const grounded = ((body.tools as unknown[]) ?? []).length > 0
       const text = model.startsWith('empty-') ? '' : 'ok'
-      const chunks = grounded && !model.startsWith('nosrc-') ? [{ web: { uri: 'https://example.com/', title: 'Example' } }] : []
-      return json(200, {
-        candidates: [{ content: { role: 'model', parts: text ? [{ text }] : [] }, index: 0, groundingMetadata: { groundingChunks: chunks } }],
-      })
+      return json(200, { candidates: [{ content: { role: 'model', parts: text ? [{ text }] : [] }, index: 0 }] })
     })
   })
   await new Promise<void>((done) => server.listen(0, '127.0.0.1', done))
@@ -83,16 +79,18 @@ describe('the daily model check', () => {
   it('calls each dependency once with a tiny request, and reports each as ok', async () => {
     seen.length = 0
     const run = await runWithoutLive(env())
-    expect(Object.keys(run.results).sort()).toEqual(['chat', 'chatFallback', 'embedding', 'googleSearch', 'tavily'])
+    expect(Object.keys(run.results).sort()).toEqual(['chat', 'chatFallback', 'embedding', 'tavily'])
     for (const result of Object.values(run.results)) expect(result).toMatchObject({ ok: true })
     expect(run.results.chat?.target).toBe('ok-chat')
     expect(run.results.chatFallback?.target).toBe('ok-fallback')
-    expect(seen).toHaveLength(5)
+    expect(seen).toHaveLength(4)
     const tavily = seen.find((call) => call.path === '/search')
     expect(tavily?.body).toMatchObject({ max_results: 1, include_raw_content: false, search_depth: 'basic' })
     // Each model is called on its own: the fallback is never used to hide a failing primary.
-    expect(seen.filter((call) => /ok-chat:generateContent/.test(call.path))).toHaveLength(2)
+    expect(seen.filter((call) => /ok-chat:generateContent/.test(call.path))).toHaveLength(1)
     expect(seen.filter((call) => /ok-fallback:generateContent/.test(call.path))).toHaveLength(1)
+    // Tavily is Wren's only search (owner, 2026-11-10): no call asks Gemini for its Google Search tool.
+    expect(seen.filter((call) => 'tools' in call.body)).toHaveLength(0)
   })
 
   it('tries a failed call once more, so a one-off blip does not hold health red for a day', async () => {
@@ -125,13 +123,11 @@ describe('the daily model check', () => {
   it('reports a failing model with a short code and status, without trying the fallback in its place', async () => {
     const run = await runWithoutLive(env({ GEMINI_MODEL: 'down-chat' }))
     expect(run.results.chat).toMatchObject({ ok: false, code: 'upstream_error', status: 500, target: 'down-chat', attempts: 2 })
-    expect(run.results.googleSearch).toMatchObject({ ok: false, code: 'upstream_error', status: 500 })
     expect(run.results.chatFallback).toMatchObject({ ok: true })
   })
 
-  it('fails an empty reply, a search with no sources, and an embedding of the wrong size', async () => {
+  it('fails an empty reply and an embedding of the wrong size', async () => {
     expect((await runWithoutLive(env({ GEMINI_MODEL: 'empty-chat' }))).results.chat).toMatchObject({ ok: false, code: 'empty_reply' })
-    expect((await runWithoutLive(env({ GEMINI_MODEL: 'nosrc-chat' }))).results.googleSearch).toMatchObject({ ok: false, code: 'no_sources' })
     expect((await runWithoutLive(env({ GEMINI_EMBEDDING_MODEL: 'embed-3' }))).results.embedding).toMatchObject({ ok: false, code: 'upstream_error' })
   })
 
@@ -225,7 +221,6 @@ describe("health's freshness rules", () => {
         chatFallback: { target: 'gemini-backup', ok: true, ms: 900 },
         embedding: { target: 'emb', ok: true, ms: 400 },
         live: { target: 'live', ok: true, ms: 400 },
-        googleSearch: { target: 'gemini-main', ok: true, ms: 300 },
         tavily: { target: 'tavily', ok: true, ms: 500 },
         ...overrides,
       },
@@ -233,16 +228,12 @@ describe("health's freshness rules", () => {
     const down = (target: string, code: string, status?: number) => ({ target, ok: false, ms: 300, code, status, attempts: 2 })
     const health = (run: ModelCheckRun) => modelsHealth({ lastRun: run, waitingSince: 0 }, now)
 
-    it('a failing backup is a warning that keeps the status ok while its primary works', () => {
-      const grounding = health(all({ googleSearch: down('gemini-main', 'demo_busy', 429) }))
-      expect(grounding).toEqual({
+    it('a failing fallback chat model is a warning that keeps the status ok while the chat model works', () => {
+      expect(health(all({ chatFallback: down('gemini-backup', 'upstream_error', 503) }))).toEqual({
         ok: true,
         warning: true,
-        detail: '5 of 6 answered 3 h ago; backup not working: Google Search grounding (gemini-main) demo_busy 429 (research uses Tavily)',
+        detail: '4 of 5 answered 3 h ago; backup not working: fallback chat model (gemini-backup) upstream_error 503 (chat uses gemini-main)',
       })
-      const fallback = health(all({ chatFallback: down('gemini-backup', 'upstream_error', 503) }))
-      expect(fallback).toMatchObject({ ok: true, warning: true })
-      expect(fallback.detail).toContain('backup not working: fallback chat model (gemini-backup) upstream_error 503 (chat uses gemini-main)')
     })
 
     it('a primary failing still degrades, even when its backup works', () => {
@@ -253,15 +244,10 @@ describe("health's freshness rules", () => {
       }
     })
 
-    it('research with neither Tavily nor grounding has no search: both are failures', () => {
-      const result = health(all({ tavily: down('tavily', 'tavily_error', 432), googleSearch: down('gemini-main', 'demo_busy', 429) }))
-      expect(result.ok).toBe(false)
-      expect(result.detail).toBe('failed 3 h ago: Google Search grounding (gemini-main) demo_busy 429; Tavily (tavily) tavily_error 432')
-    })
-
-    it('grounding is the only search when Tavily has no key, so its failure degrades', () => {
-      const result = health(all({ tavily: { target: 'tavily', ok: null, ms: 0, code: 'no_tavily_key' }, googleSearch: down('gemini-main', 'demo_busy', 429) }))
-      expect(result.ok).toBe(false)
+    it('a Google Search result saved before the grounding check was dropped is ignored', () => {
+      const old = all({})
+      const saved = { ...old, results: { ...old.results, googleSearch: down('gemini-main', 'demo_busy', 429) } } as ModelCheckRun
+      expect(health(saved)).toEqual({ ok: true, detail: '5 of 5 answered 3 h ago' })
     })
 
     it('chat with both models down is a failure of both', () => {

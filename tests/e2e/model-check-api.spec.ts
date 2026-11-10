@@ -13,8 +13,8 @@ test('the daily check calls every dependency and health reports the result', asy
 
   const health = await (await request.get('/api/health')).json()
   expect(health.checks.models.ok).toBe(true)
-  expect(health.checks.models.detail).toMatch(/^6 of 6 answered \d+ min ago$/)
-  expect(Object.keys(health.models.results).sort()).toEqual(['chat', 'chatFallback', 'embedding', 'googleSearch', 'live', 'tavily'])
+  expect(health.checks.models.detail).toMatch(/^5 of 5 answered \d+ min ago$/)
+  expect(Object.keys(health.models.results).sort()).toEqual(['chat', 'chatFallback', 'embedding', 'live', 'tavily'])
   for (const result of Object.values(health.models.results) as { ok: boolean; ms: number }[]) {
     expect(result.ok).toBe(true)
     expect(result.ms).toBeGreaterThanOrEqual(0)

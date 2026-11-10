@@ -7,7 +7,7 @@
  */
 
 /** Each dependency the check calls, in the order health lists them. */
-const MODEL_CHECKS = ['chat', 'chatFallback', 'embedding', 'live', 'googleSearch', 'tavily'] as const
+const MODEL_CHECKS = ['chat', 'chatFallback', 'embedding', 'live', 'tavily'] as const
 export type ModelCheckName = (typeof MODEL_CHECKS)[number]
 
 const LABELS: Record<ModelCheckName, string> = {
@@ -15,7 +15,6 @@ const LABELS: Record<ModelCheckName, string> = {
   chatFallback: 'fallback chat model',
   embedding: 'embeddings',
   live: 'Gemini Live',
-  googleSearch: 'Google Search grounding',
   tavily: 'Tavily',
 }
 
@@ -64,13 +63,12 @@ function failureText(name: ModelCheckName, result: ProbeResult): string {
 
 /**
  * The backup-only paths and what covers for them while they're down: the
- * fallback chat model (the primary answers chat) and Google Search grounding
- * (Tavily searches for research). A backup's failure is a warning while its
- * primary works, and a failure when the primary is down or unchecked too.
+ * fallback chat model (the primary answers chat). A backup's failure is a
+ * warning while its primary works, and a failure when the primary is down or
+ * unchecked too.
  */
 const BACKUPS: Partial<Record<ModelCheckName, { primary: ModelCheckName; covered: (primary: ProbeResult) => string }>> = {
   chatFallback: { primary: 'chat', covered: (primary) => `chat uses ${primary.target}` },
-  googleSearch: { primary: 'tavily', covered: () => 'research uses Tavily' },
 }
 
 export interface ModelsHealth {
