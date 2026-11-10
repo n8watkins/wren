@@ -3,8 +3,8 @@ import { DAILY_LIMITS, GUEST_LIMITS } from '@/lib/limits'
 
 /**
  * The short "How this works" explainers that tips and buttons open. Voice
- * and Research say plainly that they arrive in the next update, Memory says
- * which part does; the meter explainer describes what runs today.
+ * says plainly that it arrives in the next update, Memory says which part
+ * does, and Research and the meter describe what runs today.
  */
 export type ExplainerId = 'mic' | 'research' | 'memory' | 'meter'
 
@@ -36,11 +36,11 @@ const EXPLAINERS: Record<ExplainerId, Explainer> = {
     icon: 'res',
     tone: 'c-sa',
     kicker: 'Research',
-    title: 'How research will work',
-    body: 'Wren will plan a few searches, open the most useful pages and read them, then draft an answer. It can only cite a page it actually fetched, and every step stays visible so you can check it.',
-    flow: ['Plan', 'Search', 'Read pages', 'Draft + cite'],
-    under: 'a Gemini tool loop runs inside your agent, so a run keeps going if you close the tab.',
-    soon: true,
+    title: 'How research works',
+    body: 'Start a run from Research runs. Wren plans a few searches, opens the most useful pages and reads them, then writes a report. It can only cite a page it actually read, and every step stays visible so you can check it. Starting a run from chat comes in the next update.',
+    flow: ['Plan', 'Search', 'Read pages', 'Write + cite'],
+    under: 'each run lives in your own agent and saves every step, so it keeps going if you close the tab.',
+    soon: false,
   },
   memory: {
     icon: 'mem',

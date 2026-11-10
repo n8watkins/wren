@@ -1,7 +1,8 @@
 // Serves the production Worker build for the E2E tests (playwright.config.ts):
 // its own wrangler config and local state under .wrangler/e2e, so it never
 // touches `npm run preview`'s data or .dev.vars. Test settings: sign-in links
-// go to the local outbox, Gemini is the mock in tests/mocks/gemini.mjs, and
+// go to the local outbox, Gemini is the mock in tests/mocks/gemini.mjs, Tavily
+// the one in tests/mocks/tavily.mjs, and
 // Turnstile uses Cloudflare's test keys with siteverify mocked, the site-wide
 // guest cap is low, and the burst limits are raised so parallel tests from one
 // IP aren't throttled
@@ -13,6 +14,7 @@ import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 const host = process.env.E2E_HOST ?? '127.0.0.2'
 const port = process.env.E2E_PORT ?? '3121'
 const mockPort = process.env.MOCK_GEMINI_PORT ?? '3127'
+const tavilyPort = process.env.MOCK_TAVILY_PORT ?? '3128'
 const dir = '.wrangler/e2e'
 const state = `${dir}/state`
 
@@ -38,6 +40,9 @@ config.vars = {
   GEMINI_BASE_URL: `http://${host}:${mockPort}`,
   GEMINI_API_KEY: 'test-demo-key',
   MEMORY_VECTORS: 'local',
+  // Research searches go to the Tavily mock (tests/mocks/tavily.mjs).
+  TAVILY_API_KEY: 'test-tavily-key',
+  TAVILY_BASE_URL: `http://${host}:${tavilyPort}`,
   BETTER_AUTH_SECRET: 'e2e-only-secret-not-used-anywhere-else-0123456789',
   // Cloudflare's always-pass Turnstile test keys; siteverify is the mock.
   TURNSTILE_SITE_KEY: '1x00000000000000000000AA',

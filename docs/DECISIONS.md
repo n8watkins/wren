@@ -72,6 +72,23 @@ Read this before changing product, design or workflow, and add every new decisio
   Caps: 500 memories and 25 MB of files per person (5 MB a file; text, Markdown and PDF, a PDF read by Gemini rather than a PDF library), enforced in the agent and shown on the Memory page (`lib/memory.ts`).
   Memory's Gemini calls (embeddings, reading a PDF, picking facts) use the person's own key when they have one, otherwise 200 calls a day on the demo key; saving never waits on Gemini: a memory that can't be embedded yet is found by its words and embedded on a later save.
   The extractor reads only the person's own recent messages, saves at most 3 lasting facts, and updates a near-duplicate (cosine 0.9 or more) instead of adding one; chat wiring calls it in the next step.
+- **Research runs** (2026-11-09, phase 3 engine and the Runs page; starting a run from chat comes next).
+  A run lives in the person's own agent (`agent/research.ts`, tables in `agent/research-store.ts`): plan 3 to 5 searches with the chat model, search each one, read up to 8 pages (at most 2 per site, 12 tries), then write a Markdown report where every `[n]` is a page the run read.
+  It is a small state machine saved in SQLite, and each step is its own scheduled callback (the Agents SDK's `schedule`) doing one bounded piece of work: one model call, one search or one page.
+  The SDK keeps a callback until it finishes, so a restart in the middle of a step runs that step again from the saved state, and a step writes only if the run is still where it found it, so nothing is saved twice; a run that stops moving for 90 s gets its next step scheduled again when it is looked at, and one still going after 10 minutes is stopped.
+  Pages to read are picked by search rank, never by a model.
+  The Runs page watches a run through one NDJSON stream (`GET /api/runs/:id/stream`) rather than polling, because polling every second or two would use up the per-person burst limit (12 requests a minute); the stream sends the whole run after every step and reconnects if it drops.
+  Budget: one run at a time and the existing 3 a day, signed in only, never counted against messages; a run that ends without a report is given back, a cancelled one is not (its searches were already paid for).
+  Research always uses the demo Gemini key: a person's own key lives only in their browser, and a run carries on after the tab closes.
+- **Search: Tavily, then Gemini's Google Search** (`agent/web-search.ts`).
+  Tavily is asked for each result's page text, which the run uses instead of fetching when there is enough of it; the backup takes over when there is no `TAVILY_API_KEY` (optional, read through `lib/secrets.ts`), Tavily is out of credits (432, 433, 429), rejects the key, or fails.
+  Which one served each search is logged (`provider`) and shown in the run.
+- **Safe fetching** (`lib/web/fetch-page.ts`, reusable by Memory for links): http and https only, on the usual ports, with no user:password; never localhost, `.local`, `.internal` and similar names, single-label names, or private, loopback, link-local, shared, test, multicast or reserved IPv4 and IPv6 addresses (IPv4 in any notation, and IPv4 inside IPv6); at most 4 redirects, each one checked again; 10 s for the whole fetch; 2 MB, counted as the body arrives; HTML, plain text and PDF only.
+  HTML is reduced to readable text with scripts, styles, forms and page furniture removed; a PDF is turned into text by Gemini as data.
+  A hostname that resolves to a private address can't be checked before the fetch in a Worker; Cloudflare's network doesn't route Worker fetches to private addresses, which covers it in production.
+- **Page text is untrusted data** (`agent/research-text.ts`).
+  It reaches the model only between markers carrying a random id the page can't know, with anything marker-like in it defused, under instructions that it is data and never instructions.
+  The plan is made from the question alone before any page is read, the report call has no tools, and the finished report keeps only citations of pages that were read and links to them: other links become plain text, bare addresses are code-quoted, reference definitions, images and HTML are removed.
 - **Plain CSS with design tokens** (`app/globals.css`) rather than a component kit, to match the mockups exactly.
 - **No incremental cache**: every page depends on who is signed in and carries a fresh CSP nonce, so OpenNext needs no R2 cache.
 

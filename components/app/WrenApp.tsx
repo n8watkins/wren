@@ -16,6 +16,7 @@ import { BottomNav, MobileHeader, Sidebar, type Person, type Place, type Theme }
 import { Composer } from './Composer'
 import { MemoryPage, type MemoryAdding } from './MemoryPage'
 import { ConfirmDeleteDialog, ExplainerDialog, HowItWorksDialog, KeyDialog, SignInDialog } from './Dialogs'
+import { Runs } from './Runs'
 import { Thread, type StreamingAnswer } from './Thread'
 import { Tips } from './Tips'
 
@@ -482,20 +483,13 @@ export function WrenApp({ person, github, initialChats, initialUsage, guestSiteK
         </div>
 
         {place === 'runs' && (
-          <section className="soonpage" data-testid="runs-page">
-            <span className="hi c-sa">
-              <Icon name="res" />
-            </span>
-            <span className="tag">Coming in the next update</span>
-            <h2>Research runs</h2>
-            <p>
-              Ask Wren to research something and it will plan searches, read the pages and write an answer that cites only what it
-              opened. Every run will be listed here, and keeps going if you close the tab.
-            </p>
-            <button type="button" className="btn" onClick={() => explain('research')}>
-              How research will work
-            </button>
-          </section>
+          <Runs
+            person={person}
+            usage={usage}
+            onUsage={setUsage}
+            onRefreshUsage={refreshUsage}
+            onSignIn={() => setModal({ kind: 'sign-in', reason: 'Sign in to research: 3 runs a day, saved with your account.' })}
+          />
         )}
         {place === 'memory' && (
           <MemoryPage

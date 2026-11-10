@@ -40,6 +40,38 @@ export const DAILY_IP_LIMITS = {
 /** Sign-in emails per address per day, so nobody can flood an inbox. */
 export const DAILY_SIGN_IN_EMAILS_PER_ADDRESS = 5
 
+/**
+ * Research runs (agent/research.ts): how much one run may search and read.
+ * The daily allowance is DAILY_LIMITS.research.
+ */
+export const RESEARCH_LIMITS = {
+  /** Characters in a research question. */
+  questionChars: 500,
+  /** Searches a run plans: at least, at most. */
+  minQueries: 3,
+  maxQueries: 5,
+  /** Results kept from each search. */
+  resultsPerSearch: 5,
+  /** Pages a run reads, and pages it may try before giving up on reaching that. */
+  maxPages: 8,
+  maxReadAttempts: 12,
+  /** Pages read from one site, so one site can't fill the report. */
+  pagesPerHost: 2,
+  /** Characters of one page's text kept and shown to the model. */
+  sourceChars: 12_000,
+  /** Runs one person keeps; the oldest go first. */
+  runsPerPerson: 50,
+  /** A run still going after this long is stopped (and refunded). */
+  stalledMs: 10 * 60 * 1000,
+} as const
+
+/** Fetching a web page for research (lib/web/fetch-page.ts). */
+export const FETCH_LIMITS = {
+  bytes: 2 * 1024 * 1024,
+  timeoutMs: 10_000,
+  redirects: 4,
+} as const
+
 export const SIZE_LIMITS = {
   /** Characters in one message. */
   messageChars: 8_000,

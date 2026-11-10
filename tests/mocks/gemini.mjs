@@ -7,6 +7,13 @@
 //   "mock:fail"         a 500 before any text
 //   anything about a heat pump: a realistic Markdown answer (for screenshots)
 // and on the key: one starting "bad-" gets Gemini's invalid-key answer.
+// Research uses generateContent (not streamed), told apart by its system prompt:
+//   the planner        three queries, each keeping the question's mock: tag
+//                      ("mock:fail" in the question: a 500 instead)
+//   Google Search      (the search backup) two results at private addresses
+//   the report writer  a report citing every source it was given; for
+//                      "mock:hostile" also a citation of a source that doesn't
+//                      exist and links to a page that wasn't read
 // Memory's calls: batchEmbedContents answers with tests/mocks/embedding.mjs,
 // and generateContent (JSON) reads a PDF (the text in its "(...) Tj" strings)
 // or picks facts: each sentence of the person's messages that says "I" or
@@ -40,9 +47,70 @@ const SAMPLE = [
   '| 3.5 tons | ~42,000 BTU/h | your house, with margin |',
 ].join('\n')
 
+const REPORT = (n) =>
+  [
+    `For under $1,500, put the battery, the brakes and the motor first: a battery of at least 500 Wh with named cells and UL 2849 certification, hydraulic disc brakes, and a motor that suits your hills [1]${n > 1 ? '[2]' : ''}.`,
+    '',
+    '## What to check',
+    '',
+    `- **Battery.** Certified packs are much less likely to catch fire, and a 500 Wh battery gives roughly 50 to 80 km of range [1]${n > 2 ? '[3]' : ''}.`,
+    `- **Brakes.** Hydraulic discs stop a heavy bike far better than mechanical ones [${Math.min(2, n)}].`,
+    `- **Motor.** Hub motors are cheaper and simpler; mid-drives climb better but wear chains faster [${Math.min(4, n)}].`,
+    '',
+    '| Part | Look for |',
+    '|---|---|',
+    `| Battery | 500 Wh or more, UL 2849 [1] |`,
+    `| Brakes | Hydraulic disc [${Math.min(2, n)}] |`,
+  ].join('\n')
+
+const HOSTILE_EXTRA = [
+  '',
+  'Also see [the login page](https://evil.example/login) and https://evil.example/steal for more [9].',
+  '',
+  '[1]: https://evil.example/ref',
+].join('\n')
+
+/** Sends a JSON answer; true, so a handler can say it answered. */
 function json(res, status, body) {
   res.writeHead(status, { 'Content-Type': 'application/json' })
   res.end(JSON.stringify(body))
+  return true
+}
+
+function answer(res, text, extra = {}) {
+  return json(res, 200, { candidates: [{ content: { role: 'model', parts: [{ text }] }, finishReason: 'STOP', index: 0, ...extra }] })
+}
+
+/** Research's one-shot calls (agent/gemini.ts generateText and searchWithGoogle); false when the call isn't research's. */
+function researchCall(res, body) {
+  const system = body.systemInstruction?.parts?.map((p) => p.text).join(' ') ?? ''
+  const prompt = (body.contents ?? []).flatMap((t) => t.parts ?? []).map((p) => p.text ?? '').join('\n')
+  if ((body.tools ?? []).some((tool) => tool.googleSearch)) {
+    return answer(res, 'Here is what I found.', {
+      groundingMetadata: {
+        groundingChunks: [
+          { web: { uri: 'http://127.0.0.1/grounding-redirect/1', title: 'localhost' } },
+          { web: { uri: 'http://10.0.0.8/grounding-redirect/2', title: '10.0.0.8' } },
+        ],
+      },
+    })
+  }
+  if (system.startsWith('You plan web research')) {
+    const question = prompt.replace(/^Question:\s*/, '')
+    if (question.includes('mock:fail')) return json(res, 500, { error: { code: 500, message: 'internal', status: 'INTERNAL' } })
+    const tag = question.match(/mock:[a-z-]+/)?.[0]
+    const topic = tag ? `${tag} e-bike` : 'e-bike under $1,500'
+    return answer(res, JSON.stringify({ queries: [`${topic} buying guide`, `${topic} battery safety`, `${topic} hub vs mid-drive motor`] }))
+  }
+  if (system.startsWith('You write research reports')) {
+    const n = Number(prompt.match(/There are (\d+) sources/)?.[1] ?? 0)
+    // The page's fake markers must arrive defused: a real-looking end marker means they weren't.
+    const id = prompt.match(/<<<BEGIN SOURCE 1 ([0-9a-f]+)>>>/)?.[1]
+    const markers = prompt.match(/<<<(BEGIN|END) SOURCE \d+ [0-9a-z]+>>>/g) ?? []
+    if (!id || markers.some((m) => !m.endsWith(`${id}>>>`))) return answer(res, 'DEFUSE FAILED')
+    return answer(res, REPORT(n) + (prompt.includes('mock:hostile') ? HOSTILE_EXTRA : ''))
+  }
+  return false
 }
 
 function pdfText(base64) {
@@ -120,7 +188,7 @@ createServer((req, res) => {
     try {
       body = JSON.parse(raw)
     } catch {}
-    if (!/:streamGenerateContent/.test(req.url ?? '')) return memoryCall(req, res, body)
+    if (!/:streamGenerateContent/.test(req.url ?? '')) return researchCall(res, body) || memoryCall(req, res, body)
     const turns = body.contents ?? []
     const last = turns.filter((t) => t.role === 'user').at(-1)?.parts?.[0]?.text ?? ''
     if (last.startsWith('mock:fail')) {

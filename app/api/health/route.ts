@@ -44,10 +44,12 @@ export async function GET(): Promise<Response> {
     env.EMAIL_TRANSPORT === 'outbox' ||
     optionalSetting(env, 'GEMINI_BASE_URL') !== undefined ||
     optionalSetting(env, 'TURNSTILE_VERIFY_URL') !== undefined ||
-    optionalSetting(env, 'MEMORY_VECTORS') !== undefined
+    optionalSetting(env, 'MEMORY_VECTORS') !== undefined ||
+    optionalSetting(env, 'TAVILY_BASE_URL') !== undefined
   const guests = guestChatConfigured(env)
   const demoKey = optionalSetting(env, 'GEMINI_API_KEY') !== undefined
   const methods = signInMethods(env)
+  const tavily = optionalSetting(env, 'TAVILY_API_KEY') !== undefined
 
   const checks: Record<string, Check> = {
     database: { ok: database.value?.ok === 1, detail: `D1 answered in ${database.ms} ms` },
@@ -67,7 +69,14 @@ export async function GET(): Promise<Response> {
     signInEmail: { ok: methods.email, detail: `sign-in links by ${env.EMAIL_TRANSPORT === 'outbox' ? 'local outbox' : 'Cloudflare Email Service'}` },
     signInGithub: { ok: methods.github, detail: methods.github ? 'GitHub sign-in is set up' : 'GitHub OAuth app not set up yet' },
     voice: { ok: null, detail: 'coming in the next update' },
-    research: { ok: null, detail: 'coming in a later update' },
+    research: {
+      ok: demoKey,
+      detail: !demoKey
+        ? 'needs the demo key'
+        : tavily
+          ? 'searches with Tavily, Gemini Google Search as the backup'
+          : 'no Tavily key yet: searches with Gemini Google Search',
+    },
     memory: memoryCheck(env, demoKey),
   }
 

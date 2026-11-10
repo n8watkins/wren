@@ -231,3 +231,100 @@ export async function generateJson(
     }
   })
 }
+
+/*
+ * Research's calls (agent/research.ts): planning the searches, reading a PDF,
+ * writing the report, and the search backup. The agent takes one of the
+ * person's daily research runs before a run starts (demo key).
+ */
+
+/** A part of a one-shot request: text, or a PDF the model reads. */
+export type GeneratePart = { text: string } | { pdf: Uint8Array }
+
+export interface GenerateOptions extends GeminiCallOptions {
+  model: string
+  fallbackModel?: string
+  systemPrompt: string
+  parts: GeneratePart[]
+  /** Ask for JSON (the planner). */
+  json?: boolean
+  /** Aborted when the run is cancelled. */
+  signal: AbortSignal
+  /** How long one model may take for the whole answer. */
+  timeoutMs?: number
+}
+
+const GENERATE_MS = 60_000
+
+function toBase64(bytes: Uint8Array): string {
+  let binary = ''
+  for (let i = 0; i < bytes.length; i += 0x8000) binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000))
+  return btoa(binary)
+}
+
+/** One whole (not streamed) answer, with the model fallback. Throws GeminiError. */
+async function generate(options: GenerateOptions, googleSearch: boolean): Promise<{ text: string; web: { url: string; title: string }[] }> {
+  return withFallback(options, 'research.model_failed', async (model) => {
+    if (options.signal.aborted) throw new GeminiError('upstream_error')
+    const attempt = new AbortController()
+    const stop = () => attempt.abort()
+    options.signal.addEventListener('abort', stop)
+    let timedOut = false
+    const timer = setTimeout(() => {
+      timedOut = true
+      attempt.abort()
+    }, options.timeoutMs ?? GENERATE_MS)
+    try {
+      const response = await client(options).models.generateContent({
+        model,
+        contents: [
+          {
+            role: 'user',
+            parts: options.parts.map((part) =>
+              'pdf' in part ? { inlineData: { mimeType: 'application/pdf', data: toBase64(part.pdf) } } : { text: part.text }
+            ),
+          },
+        ],
+        config: {
+          systemInstruction: options.systemPrompt,
+          abortSignal: attempt.signal,
+          thinkingConfig: { thinkingLevel: ThinkingLevel.LOW },
+          ...(options.json ? { responseMimeType: 'application/json' } : {}),
+          ...(googleSearch ? { tools: [{ googleSearch: {} }] } : {}),
+        },
+      })
+      const web = (response.candidates?.[0]?.groundingMetadata?.groundingChunks ?? []).flatMap((chunk) =>
+        chunk.web?.uri ? [{ url: chunk.web.uri, title: chunk.web.title ?? '' }] : []
+      )
+      return { text: response.text ?? '', web }
+    } catch (error) {
+      // A cancelled run: the other model's attempt ends at its first line, without a request.
+      if (options.signal.aborted) throw new GeminiError('upstream_error')
+      throw timedOut ? new GeminiError('upstream_error', 504) : classifyGeminiError(error, options.keySource)
+    } finally {
+      clearTimeout(timer)
+      options.signal.removeEventListener('abort', stop)
+    }
+  })
+}
+
+/** A whole answer as text: research planning, reading a PDF, writing the report. */
+export async function generateText(options: GenerateOptions): Promise<string> {
+  return (await generate(options, false)).text
+}
+
+/**
+ * The search backup: Gemini answers with its Google Search tool on, and the
+ * pages it found (the grounding sources) are the results. Their addresses are
+ * Google redirect links that the safe fetcher follows to the page.
+ */
+export async function searchWithGoogle(
+  options: Omit<GenerateOptions, 'parts' | 'json' | 'systemPrompt'> & { query: string }
+): Promise<{ url: string; title: string }[]> {
+  const { web } = await generate(
+    { ...options, systemPrompt: 'Search the web for the query and answer in one short paragraph.', parts: [{ text: options.query }] },
+    true
+  )
+  const seen = new Set<string>()
+  return web.filter((page) => !seen.has(page.url) && seen.add(page.url))
+}

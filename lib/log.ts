@@ -14,6 +14,8 @@ export interface LogFields {
   model?: string
   keySource?: 'demo' | 'user'
   upstreamStatus?: number
+  /** Which search service answered a research search. */
+  provider?: 'tavily' | 'google'
 }
 
 const ALLOWED = new Set<keyof LogFields>([
@@ -26,6 +28,7 @@ const ALLOWED = new Set<keyof LogFields>([
   'model',
   'keySource',
   'upstreamStatus',
+  'provider',
 ])
 
 export function redact(fields: LogFields): LogFields {

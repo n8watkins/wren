@@ -42,7 +42,7 @@ test('the guest shell matches the layout for this width', async ({ page }) => {
   await noHorizontalScroll(page)
 })
 
-test('Voice and Research say they are coming, without pretending, and Memory asks guests to sign in', async ({ page }) => {
+test('Voice says it is coming, without pretending; Research and Memory ask guests to sign in', async ({ page }) => {
   await skipIntro(page)
   await page.goto('/')
   const scope = page.locator(isPhone(page) ? '.mcomp' : '.composer')
@@ -54,18 +54,23 @@ test('Voice and Research say they are coming, without pretending, and Memory ask
   await expect(explainer).toBeHidden()
 
   await scope.locator('[data-tip="res"]').click()
-  await expect(explainer).toContainText('How research will work')
+  await expect(explainer).toContainText('How research works')
+  await expect(explainer).toContainText('Start a run from Research runs')
+  await expect(explainer).not.toContainText('Coming in the next update')
   await page.keyboard.press('Escape')
-
-  await page.goto('/runs')
-  await expect(page.getByTestId('runs-page')).toContainText('Coming in the next update')
-  await noHorizontalScroll(page)
 
   // Memory works now, for people who sign in; guests are told why they have none.
   await page.goto('/memory')
   await expect(page.getByTestId('memory-page')).toContainText('Guests get no memory')
   await page.getByTestId('memory-sign-in').click()
   await expect(page.getByTestId('sign-in')).toContainText('Sign in to keep notes, links and files in your memory.')
+  await noHorizontalScroll(page)
+
+  // Research works for people who sign in; a guest is asked to.
+  await page.goto('/runs')
+  await expect(page.getByTestId('runs-page')).not.toContainText('Coming in the next update')
+  await page.getByTestId('runs-sign-in').click()
+  await expect(page.getByTestId('sign-in')).toContainText('Sign in to research')
   await noHorizontalScroll(page)
 })
 
