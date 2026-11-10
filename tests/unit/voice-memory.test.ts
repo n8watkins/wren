@@ -32,7 +32,7 @@ interface AiScript {
 }
 
 function scriptedAi(script: AiScript) {
-  const calls: { kind: 'embed' | 'json'; prompt: string }[] = []
+  const calls: { kind: 'embed' | 'json'; prompt: string; text?: string }[] = []
   const ai: MemoryAi = {
     async embed(text) {
       calls.push({ kind: 'embed', prompt: text })
@@ -41,7 +41,7 @@ function scriptedAi(script: AiScript) {
       return mockEmbedding(text)
     },
     async json(request) {
-      calls.push({ kind: 'json', prompt: request.systemPrompt })
+      calls.push({ kind: 'json', prompt: request.systemPrompt, text: request.parts.map((p) => ('text' in p ? p.text : '')).join('\n') })
       if (script.failWith) throw new MemoryAiError(script.failWith as never)
       if (request.systemPrompt.startsWith('You check which facts')) return { used: script.used ?? [] }
       return { facts: script.facts ?? [] }
@@ -107,7 +107,7 @@ function harness(options: { ai?: AiScript; realMeter?: { aiCallsUsed: number } }
       new VoiceMemory(chatMemory, engineFor, { userKey, ip: '198.18.0.9' }, (chatId) =>
         listMessages(sql, chatId)
           .filter((m) => m.role === 'user')
-          .map((m) => ({ id: m.id, text: m.content }))
+          .map((m) => ({ id: m.id, text: m.content, createdAt: m.createdAt }))
       ),
     connect: async (_key, ev, memory) => {
       events = ev
@@ -330,41 +330,104 @@ describe('voice with memory: tool calls', () => {
   })
 })
 
+const FACT = (id: string, text: string) =>
+  `INSERT INTO memories (id, kind, title, text, url, file_name, file_size, file_type, origin, indexed, created_at, updated_at) VALUES ('${id}', 'fact', '', '${text}', NULL, NULL, NULL, NULL, 'wren', 0, 1, 1)`
+
+const extractions = (h: ReturnType<typeof harness>) => h.calls.filter((c) => c.kind === 'json' && c.prompt.startsWith('You keep a short memory'))
+const factChecks = (h: ReturnType<typeof harness>) => h.calls.filter((c) => c.kind === 'json' && c.prompt.startsWith('You check which facts'))
+
 describe('voice with memory: after each answer', () => {
-  it('Wren saves lasting facts from what was said, with "Saved to Memory" marks, and checks which facts the answer used', async () => {
-    const h = harness({ ai: { facts: ['Is vegetarian.'], used: ['f1'] } })
-    h.sql.exec("INSERT INTO memories (id, kind, title, text, url, file_name, file_size, file_type, origin, indexed, created_at, updated_at) VALUES ('f1', 'fact', '', 'Lives in Portland.', NULL, NULL, NULL, NULL, 'wren', 0, 1, 1)")
+  it(`saves lasting facts in batches: every ${VOICE_LIMITS.rememberEveryTurns} finished answers, shown under the turn that ran it`, async () => {
+    const h = harness({ ai: { facts: ['Is vegetarian.'] } })
     await h.start()
-    turn(h, "I'm vegetarian. Any dinner idea near home?", 'Try a mushroom stew; Portland has great mushrooms.')
+    for (let i = 1; i < VOICE_LIMITS.rememberEveryTurns; i++) {
+      turn(h, i === 1 ? "I'm vegetarian, by the way." : `Question number ${i} for you`, `Answer number ${i}.`)
+      await h.settle()
+    }
+    expect(extractions(h)).toEqual([])
+    turn(h, 'And one more question', 'And one more answer.')
     await h.settle()
-    const [user, answer] = h.messages()
-    const byMessage = new Map(h.marks().map((m) => [m.messageId, m.memory]))
-    expect(byMessage.get(answer.id)?.recalled).toEqual([{ id: 'f1', kind: 'fact', label: 'Lives in Portland.' }])
-    expect(byMessage.get(user.id)?.saves).toEqual([expect.objectContaining({ action: 'added', text: 'Is vegetarian.', undone: false })])
-    // Both kept for a reload.
-    const kept = h.chatMemory.forChat(h.chatId())
-    expect(kept.get(user.id)?.saves).toHaveLength(1)
-    expect(kept.get(answer.id)?.recalled).toHaveLength(1)
-    // The extractor read only the person's own words; attribution and extraction each made one JSON call.
-    expect(h.calls.filter((c) => c.kind === 'json')).toHaveLength(2)
+    expect(extractions(h)).toHaveLength(1)
+    // It read every spoken turn of the batch, not only typed chat's last four.
+    expect(extractions(h)[0].text).toContain("I'm vegetarian, by the way.")
+    expect(extractions(h)[0].text).toContain('And one more question')
+    const users = h.messages().filter((m) => m.role === 'user')
+    const last = users.at(-1)!
+    expect(h.marks().map((m) => m.messageId)).toEqual([last.id])
+    expect(h.marks()[0].memory?.saves).toEqual([expect.objectContaining({ action: 'added', text: 'Is vegetarian.', undone: false })])
+    expect(h.chatMemory.forChat(h.chatId()).get(last.id)?.saves).toHaveLength(1)
   })
 
-  it('reads each of your messages once, and does nothing after an interrupted answer', async () => {
+  it('runs the last batch when the session ends, in the agent, over only the turns not read yet', async () => {
     const h = harness({ ai: { facts: ['Has a dog named Juniper.'] } })
+    // Said before the session (typed chat already read it).
+    const before = createChat(h.sql, 'Earlier')
+    addMessage(h.sql, before.id, 'user', 'Typed long ago')
     await h.start()
-    h.events().inputText('My dog is called Juniper.')
-    h.events().audio(new Uint8Array(2))
-    h.events().outputText('What a lovely')
-    h.events().interrupted()
+    turn(h, 'My dog is called Juniper.', 'What a lovely name.')
+    turn(h, 'She is three years old', 'A great age for long walks.')
     await h.settle()
-    expect(h.calls).toEqual([])
-    expect(h.marks()).toEqual([])
+    expect(extractions(h)).toEqual([])
+    // The browser goes away without a word.
+    h.relay.clientGone()
+    await h.settle()
+    expect(extractions(h)).toHaveLength(1)
+    expect(extractions(h)[0].text).toContain('My dog is called Juniper.')
+    expect(extractions(h)[0].text).toContain('She is three years old')
+    const lastUser = h.messages().filter((m) => m.role === 'user').at(-1)!
+    // Kept with the message for the chat to show (the socket is closed by now).
+    expect(h.chatMemory.forChat(h.chatId()).get(lastUser.id)?.saves?.map((s) => s.text)).toEqual(['Has a dog named Juniper.'])
+  })
 
-    turn(h, 'Tell me more.', 'Juniper is a lovely name for a dog.')
+  it('reads nothing at the end when every turn was read already, and nothing after an interrupted answer alone', async () => {
+    const h = harness({ ai: { facts: [] } })
+    await h.start()
+    for (let i = 0; i < VOICE_LIMITS.rememberEveryTurns; i++) turn(h, `Turn number ${i} here`, `Reply ${i}.`)
     await h.settle()
-    const jsonCalls = h.calls.filter((c) => c.kind === 'json').length
-    expect(jsonCalls).toBe(1)
-    expect(h.marks().map((m) => m.memory?.saves?.[0]?.text)).toEqual(['Has a dog named Juniper.'])
+    expect(extractions(h)).toHaveLength(1)
+    await h.relay.end('stopped')
+    await h.settle()
+    expect(extractions(h)).toHaveLength(1)
+
+    const g = harness({ ai: { facts: ['x'] } })
+    await g.start()
+    g.events().audio(new Uint8Array(2))
+    g.events().outputText('Hello there')
+    g.events().interrupted()
+    await g.relay.end('stopped')
+    await g.settle()
+    expect(g.calls).toEqual([])
+  })
+
+  it('checks which facts an answer used only when they could have mattered', async () => {
+    const h = harness({ ai: { used: ['f1'] } })
+    h.sql.exec(FACT('f1', 'Lives in Portland.'))
+    await h.start()
+    // Small talk: no check.
+    turn(h, 'Thanks!', 'You are welcome.')
+    await h.settle()
+    expect(factChecks(h)).toEqual([])
+    // A real exchange: checked, and the fact it used becomes a chip.
+    turn(h, 'Any dinner idea near home tonight?', 'Try a mushroom stew tonight; Portland has great mushrooms at the market this time of year.')
+    await h.settle()
+    expect(factChecks(h)).toHaveLength(1)
+    const answer = h.messages().at(-1)!
+    expect(h.marks().at(-1)).toEqual({ t: 'marks', messageId: answer.id, memory: { recalled: [{ id: 'f1', kind: 'fact', label: 'Lives in Portland.' }] } })
+    // A short answer after a search: checked, as Memory was looked at for it.
+    h.events().inputText('What do I like?')
+    h.events().toolCall([{ id: 'c1', name: 'search_memory', args: { query: 'what I like' } }])
+    await h.settle()
+    turn(h, '', 'Mushrooms, I think.')
+    await h.settle()
+    expect(factChecks(h)).toHaveLength(2)
+  })
+
+  it('makes no facts check when the person has no facts', async () => {
+    const h = harness()
+    await h.start()
+    turn(h, 'Any dinner idea near home tonight?', 'Try a mushroom stew tonight; the market has great mushrooms at this time of year.')
+    await h.settle()
+    expect(factChecks(h)).toEqual([])
   })
 
   it('when the daily memory allowance is used up, voice carries on without memory, quietly', async () => {

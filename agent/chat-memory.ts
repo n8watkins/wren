@@ -291,8 +291,10 @@ export class ChatMemory {
    * After an answer: lasting facts from the person's own recent messages,
    * saved by Wren and kept with the message they came from, for Undo.
    */
-  async remember(input: RequestFrom & { chatId: string; messageId: string; own: { id: string; text: string }[] }): Promise<AutoSave[]> {
-    const saved = await this.engineFor(input.userKey, input.ip).rememberFacts(input.own, { chatId: input.chatId })
+  async remember(
+    input: RequestFrom & { chatId: string; messageId: string; own: { id: string; text: string }[]; limit?: number }
+  ): Promise<AutoSave[]> {
+    const saved = await this.engineFor(input.userKey, input.ip).rememberFacts(input.own, { chatId: input.chatId }, input.limit)
     const now = Date.now()
     return saved.map((fact) => {
       const id = crypto.randomUUID()

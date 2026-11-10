@@ -31,6 +31,9 @@ export interface WrenAppProps {
   guestSiteKey: string | null
 }
 
+/** Wren's last automatic save of a voice session takes a few seconds after it ends (one or two Gemini calls). */
+const VOICE_MARKS_REFRESH_MS = 6_000
+
 const EMPTY_USAGE = (guest: boolean): UsageSnapshot => ({
   chat: { used: 0, limit: guest ? GUEST_LIMITS.chat : DAILY_LIMITS.chat },
   voiceMinutes: { used: 0, limit: guest ? 0 : DAILY_LIMITS.voiceMinutes },
@@ -401,6 +404,18 @@ export function WrenApp({ person, github, initialChats, initialUsage, guestSiteK
    * to another chat or page ends the session.
    */
   const voiceChatRef = useRef<string | null>(null)
+  /** Wren's last automatic save of a voice session runs in the agent after the socket closes; its marks come with the chat. */
+  const refreshMarksLater = (id: string) => {
+    window.setTimeout(() => {
+      api
+        .getChat(id)
+        .then((data) => {
+          const marks = new Map(data.messages.map((m) => [m.id, m.memory]))
+          setMessages((list) => list.map((m) => (marks.has(m.id) ? { ...m, memory: marks.get(m.id) } : m)))
+        })
+        .catch(() => undefined)
+    }, VOICE_MARKS_REFRESH_MS)
+  }
   const voice = useVoice({
     onMessage: (chat, message) => {
       setChats((list) => [{ ...chat, updatedAt: Date.now() }, ...list.filter((c) => c.id !== chat.id)])
@@ -416,7 +431,9 @@ export function WrenApp({ person, github, initialChats, initialUsage, guestSiteK
     onMarks: (messageId, memory) => setMessages((list) => list.map((m) => (m.id === messageId ? { ...m, memory: memory ?? undefined } : m))),
     onUsage: setUsage,
     onEnded: (problem) => {
+      const ended = voiceChatRef.current
       voiceChatRef.current = null
+      if (ended) refreshMarksLater(ended)
       if (problem) setError(problem.message, problem.signIn, problem.info)
       refreshUsage()
     },

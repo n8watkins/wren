@@ -48,8 +48,13 @@ export interface VoiceMemoryPort {
   save(text: string, at: { chatId: string; messageId: string | null } | null): Promise<{ output: unknown; marked?: string }>
   /** Keeps what search_memory found this turn as chips on the answer (none saved: dropped). True when it kept any. */
   recordFound(chatId: string, answerId: string | null): boolean
-  /** After a finished answer: the facts it used, and Wren's saves. The messages whose marks changed. */
-  afterAnswer(turn: { chatId: string; user: ChatMessage | null; answer: ChatMessage }): Promise<string[]>
+  /**
+   * After a finished answer: the facts it used (when they could have mattered), and with `remember`,
+   * Wren's saves from the spoken turns since the last batch. The messages whose marks changed.
+   */
+  afterAnswer(turn: { chatId: string; user: ChatMessage | null; answer: ChatMessage; searched: boolean; remember: boolean }): Promise<string[]>
+  /** Wren's saves from the turns not read yet, shown under `messageId` (each batch, and once at the end). */
+  rememberBatch(chatId: string, messageId: string): Promise<string[]>
   marks(chatId: string, messageId: string): MessageMemory | null
 }
 
@@ -105,8 +110,11 @@ export class VoiceRelay {
   private memory?: VoiceMemoryPort
   /** The person's newest message in the chat (said or typed): where a save shows, what an answer answers. */
   private lastUser: ChatMessage | null = null
-  /** Memory tool calls in the turn being answered. */
+  /** Memory tool calls in the turn being answered, and whether one searched. */
   private toolCalls = 0
+  private searched = false
+  /** Finished answers so far: every VOICE_LIMITS.rememberEveryTurns of them, Wren's automatic save runs. */
+  private finishedAnswers = 0
   /** Tool calls Gemini cancelled: their results are not sent. */
   private readonly cancelled = new Set<string>()
   /** Memory work after answers, one at a time. */
@@ -318,6 +326,7 @@ export class VoiceRelay {
     if (call.name === 'search_memory') {
       const query = arg('query').slice(0, SIZE_LIMITS.messageChars)
       if (!query) throw new Error('bad_request')
+      this.searched = true
       return { output: await memory.search(query) }
     }
     if (call.name === 'save_to_memory') {
@@ -331,16 +340,24 @@ export class VoiceRelay {
 
   /** An answer was saved (or wasn't): its chips, then, if it finished, the work after it. */
   private answered(answer: ChatMessage | null, done: boolean) {
+    const searched = this.searched
     this.toolCalls = 0
+    this.searched = false
     const memory = this.memory
     const chat = this.deps.chat
     if (!memory || !chat) return
     if (memory.recordFound(chat.id, answer?.id ?? null) && answer) this.sendMarks(memory, answer.id)
     if (!done || !answer) return
     const user = this.lastUser
+    const remember = ++this.finishedAnswers % VOICE_LIMITS.rememberEveryTurns === 0
+    this.afterMemory(memory, () => memory.afterAnswer({ chatId: chat.id, user, answer, searched, remember }))
+  }
+
+  /** Memory work after answers, one at a time; it carries on after the session ends (the agent runs it, not the browser). */
+  private afterMemory(memory: VoiceMemoryPort, work: () => Promise<string[]>) {
     this.afterWork = this.afterWork
       .then(async () => {
-        for (const id of await memory.afterAnswer({ chatId: chat.id, user, answer })) this.sendMarks(memory, id)
+        for (const id of await work()) this.sendMarks(memory, id)
       })
       .catch(() => log.warn('voice.memory_after_failed', { code: 'internal' }))
   }
@@ -427,6 +444,11 @@ export class VoiceRelay {
     if (wasLive) {
       this.saveUserTurn()
       this.answered(this.saveModelTurn('stopped'), false)
+      // The last batch of Wren's automatic save: whatever was said since the previous one.
+      const memory = this.memory
+      const chat = this.deps.chat
+      const user = this.lastUser
+      if (memory && chat && user) this.afterMemory(memory, () => memory.rememberBatch(chat.id, user.id))
     }
     const used = this.usedSeconds()
     if (!options.quiet) this.send({ t: 'end', reason })

@@ -405,10 +405,10 @@ export class WrenAgent extends Agent<Cloudflare.Env> {
   }
 
   /** The person's own messages in a chat, oldest first: all the extractor may read. */
-  private ownMessages(chatId: string): { id: string; text: string }[] {
+  private ownMessages(chatId: string): { id: string; text: string; createdAt: number }[] {
     return listMessages(this.db, chatId)
       .filter((message) => message.role === 'user')
-      .map((message) => ({ id: message.id, text: message.content }))
+      .map((message) => ({ id: message.id, text: message.content, createdAt: message.createdAt }))
   }
 
   /** "Save to Memory" on one of the chat's messages (yours or Wren's). */

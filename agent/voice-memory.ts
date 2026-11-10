@@ -64,15 +64,17 @@ export class VoiceMemory implements VoiceMemoryPort {
   private facts: Memory[] = []
   /** What search_memory found during the turn being answered: the answer's chips. */
   private readonly found = new Map<string, Memory>()
-  /** Your messages the extractor already read after an answer (one answer, one look). */
+  /** Your messages the extractor already read (each is read once). */
   private readonly remembered = new Set<string>()
+  /** Messages from before the session were read after their typed answers. */
+  private readonly since = Date.now()
 
   constructor(
     private readonly chat: ChatMemory,
     private readonly engineFor: EngineFor,
     private readonly from: { userKey?: string; ip: string },
     /** Your own messages in a chat, oldest first, for the extractor. */
-    private readonly ownMessages: (chatId: string) => { id: string; text: string }[]
+    private readonly ownMessages: (chatId: string) => { id: string; text: string; createdAt: number }[]
   ) {}
 
   /** Wren's facts about the person, for the session's system instruction. No Gemini call. */
@@ -112,26 +114,44 @@ export class VoiceMemory implements VoiceMemoryPort {
     return true
   }
 
-  async afterAnswer(turn: { chatId: string; user: ChatMessage | null; answer: ChatMessage }): Promise<string[]> {
+  async afterAnswer(turn: { chatId: string; user: ChatMessage | null; answer: ChatMessage; searched: boolean; remember: boolean }): Promise<string[]> {
     const changed: string[] = []
-    const recalled: RecalledMemory[] = this.marks(turn.chatId, turn.answer.id)?.recalled ?? []
-    const chips = await this.chat.attribute({
-      ...this.from,
-      chatId: turn.chatId,
-      answerId: turn.answer.id,
-      message: turn.user?.content ?? '',
-      answer: turn.answer.content,
-      facts: this.facts,
-      recalled,
-    })
-    if (chips) changed.push(turn.answer.id)
-    const user = turn.user
-    if (user && !this.remembered.has(user.id)) {
-      this.remembered.add(user.id)
-      const saves = await this.chat.remember({ ...this.from, chatId: turn.chatId, messageId: user.id, own: this.ownMessages(turn.chatId) })
-      if (saves.length) changed.push(user.id)
+    if (this.factsMayApply(turn)) {
+      const recalled: RecalledMemory[] = this.marks(turn.chatId, turn.answer.id)?.recalled ?? []
+      const chips = await this.chat.attribute({
+        ...this.from,
+        chatId: turn.chatId,
+        answerId: turn.answer.id,
+        message: turn.user?.content ?? '',
+        answer: turn.answer.content,
+        facts: this.facts,
+        recalled,
+      })
+      if (chips) changed.push(turn.answer.id)
     }
+    if (turn.remember && turn.user) changed.push(...(await this.rememberBatch(turn.chatId, turn.user.id)))
     return changed
+  }
+
+  /**
+   * Whether the "facts used" check is worth a Gemini call: the person has
+   * facts, and either search_memory ran for this answer or it is a real
+   * exchange (small talk like "thanks" and "sure, go ahead" can't have used one).
+   */
+  private factsMayApply(turn: { user: ChatMessage | null; answer: ChatMessage; searched: boolean }): boolean {
+    if (!this.facts.length) return false
+    if (turn.searched) return true
+    const words = (text: string) => text.split(/\s+/).filter((word) => /\p{L}/u.test(word)).length
+    return words(turn.user?.content ?? '') >= VOICE_LIMITS.factsCheckSaidWords && words(turn.answer.content) >= VOICE_LIMITS.factsCheckAnswerWords
+  }
+
+  async rememberBatch(chatId: string, messageId: string): Promise<string[]> {
+    const unread = this.ownMessages(chatId).filter((m) => m.createdAt >= this.since && !this.remembered.has(m.id))
+    if (!unread.length) return []
+    for (const m of unread) this.remembered.add(m.id)
+    const own = unread.slice(-VOICE_LIMITS.rememberMessages).map(({ id, text }) => ({ id, text }))
+    const saves = await this.chat.remember({ ...this.from, chatId, messageId, own, limit: VOICE_LIMITS.rememberMessages })
+    return saves.length ? [messageId] : []
   }
 
   marks(chatId: string, messageId: string): MessageMemory | null {
