@@ -50,6 +50,8 @@ const NO_EVENTS: LiveEvents = {
   turnComplete: () => undefined,
   goAway: () => undefined,
   closed: () => undefined,
+  toolCall: () => undefined,
+  toolCancelled: () => undefined,
 }
 
 /** The probes for this Worker's settings, smallest request each. */
