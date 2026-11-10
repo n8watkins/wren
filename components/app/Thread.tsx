@@ -3,10 +3,12 @@
 import { useEffect, useRef, useState } from 'react'
 import type { ChatMessage } from '@/agent/chats'
 import type { RecalledMemory } from '@/lib/memory'
+import type { RunDetail } from '@/lib/research'
 import { Icon } from '../Icons'
 import { Markdown } from '../Markdown'
 import { WrenMark } from '../WrenMark'
 import { RecallChips, SaveToMemory, SavedLines, type ThreadMemory } from './ChatMemory'
+import { ResearchAnswer, type ResearchMessage } from './ResearchCard'
 
 export interface StreamingAnswer {
   chatId: string | null
@@ -22,7 +24,7 @@ function Answer({
   busy,
   memory,
   onRegenerate,
-  onExplain,
+  onResearchThis,
 }: {
   message: Pick<ChatMessage, 'id' | 'content' | 'memory'> & { status: ChatMessage['status'] | 'streaming'; recalled?: RecalledMemory[] }
   streaming: boolean
@@ -30,7 +32,7 @@ function Answer({
   busy: boolean
   memory: ThreadMemory | null
   onRegenerate: () => void
-  onExplain: (id: 'research' | 'memory') => void
+  onResearchThis: (messageId: string) => void
 }) {
   const recalled = message.recalled ?? message.memory?.recalled
   const [copied, setCopied] = useState(false)
@@ -69,7 +71,7 @@ function Answer({
               Regenerate
             </button>
           )}
-          <button type="button" className="res hide-phone" onClick={() => onExplain('research')}>
+          <button type="button" className="res hide-phone" onClick={() => onResearchThis(message.id)} data-testid="research-this">
             <Icon name="res" />
             Research this
           </button>
@@ -85,16 +87,25 @@ export function Thread({
   streaming,
   busy,
   memory,
+  researchLimit,
   onRegenerate,
-  onExplain,
+  onResearchThis,
+  onResearchSettled,
+  onResearchRetry,
 }: {
   messages: ChatMessage[]
   streaming: StreamingAnswer | null
   busy: boolean
   /** Memory in chat; null for guests. */
   memory: ThreadMemory | null
+  /** Research runs a day. */
+  researchLimit: number
   onRegenerate: () => void
-  onExplain: (id: 'research' | 'memory') => void
+  /** "Research this" on an answer: the question it answered goes into the composer, ready to research. */
+  onResearchThis: (messageId: string) => void
+  /** A run started from chat has ended. */
+  onResearchSettled: (messageId: string, run: RunDetail) => void
+  onResearchRetry: (question: string) => void
 }) {
   const ref = useRef<HTMLDivElement>(null)
   const pinned = useRef(true)
@@ -119,6 +130,12 @@ export function Thread({
         {messages.map((message) =>
           message.role === 'user' ? (
             <div className="uturn" key={message.id}>
+              {message.asksResearch && (
+                <span className="ask-res" data-testid="research-ask">
+                  <Icon name="res" />
+                  Research
+                </span>
+              )}
               <div className="urow">
                 {memory && !message.id.startsWith('pending-') && (
                   <SaveToMemory messageId={message.id} savedAs={message.memory?.savedAs} memory={memory} compact />
@@ -131,6 +148,15 @@ export function Thread({
                 <SavedLines saves={message.memory.saves} memory={memory} />
               )}
             </div>
+          ) : message.research ? (
+            <ResearchAnswer
+              key={message.id}
+              message={message as ResearchMessage}
+              memory={memory}
+              researchLimit={researchLimit}
+              onSettled={onResearchSettled}
+              onRetry={onResearchRetry}
+            />
           ) : (
             <Answer
               key={message.id}
@@ -140,7 +166,7 @@ export function Thread({
               busy={busy}
               memory={memory}
               onRegenerate={onRegenerate}
-              onExplain={onExplain}
+              onResearchThis={onResearchThis}
             />
           )
         )}
@@ -152,7 +178,7 @@ export function Thread({
             busy
             memory={memory}
             onRegenerate={onRegenerate}
-            onExplain={onExplain}
+            onResearchThis={onResearchThis}
           />
         )}
       </div>

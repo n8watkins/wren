@@ -1,0 +1,238 @@
+/*
+ * A research run in chat (components/app/ResearchCard.tsx): saffron, like the
+ * Runs page whose steps and sources it shares (Runs.module.css).
+ */
+.kicker {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font: 500 10.5px/1 var(--f-mono);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--saffron);
+}
+.kicker svg {
+  width: 12px;
+  height: 12px;
+}
+
+/* the run while it goes */
+.card {
+  border: 1px solid color-mix(in srgb, var(--saffron) 28%, transparent);
+  background: color-mix(in srgb, var(--saffron-soft) 55%, var(--surface));
+  border-radius: 14px;
+  padding: 12px 14px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+.top {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+}
+.count {
+  font-size: 12px;
+  color: var(--text-3);
+}
+.sp {
+  flex: 1;
+}
+.stop {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 11px;
+  border-radius: 8px;
+  border: 1px solid var(--line-strong);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 12.5px;
+  font-weight: 500;
+}
+.stop:hover:not(:disabled) {
+  background: var(--surface-2);
+}
+.stop:disabled {
+  opacity: 0.6;
+}
+.stop svg {
+  width: 13px;
+  height: 13px;
+}
+.steps {
+  list-style: none;
+  margin: 2px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.planning {
+  font-size: 13.5px;
+  color: var(--text-2);
+  padding: 6px 0;
+}
+.foot {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  justify-content: space-between;
+  padding-top: 8px;
+  border-top: 1px dashed color-mix(in srgb, var(--saffron) 25%, var(--line));
+  font-size: 12px;
+  color: var(--text-3);
+}
+.problem {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--danger);
+}
+
+/* "Full run": a link in the action row's button shape */
+.runLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 12px;
+  font-weight: 500;
+  padding: 4px 6px 4px 8px;
+  border-radius: 7px;
+  color: var(--saffron);
+  text-decoration: none;
+  white-space: nowrap;
+}
+.runLink:hover {
+  background: var(--saffron-soft);
+}
+.runLink svg {
+  width: 13px;
+  height: 13px;
+}
+.foot .runLink {
+  margin-right: -6px;
+}
+
+/* the report */
+.report {
+  min-width: 0;
+}
+/* Citations: [n] links to source n. */
+.report a {
+  font: 600 11px/1 var(--f-mono);
+  color: var(--saffron);
+  background: var(--saffron-soft);
+  border-radius: 4px;
+  padding: 2px 3px;
+  margin: 0 1px;
+  text-decoration: none;
+  vertical-align: 1px;
+  white-space: nowrap;
+}
+.report a:hover {
+  text-decoration: underline;
+}
+.sourcesBox {
+  border-top: 1px solid var(--line);
+  padding-top: 12px;
+  margin-top: 2px;
+}
+.label {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  font: 500 10.5px/1.3 var(--f-mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-3);
+}
+.label small {
+  font: 400 12px/1.3 var(--f-ui);
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+/* failed or stopped */
+.ended {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  border-radius: 12px;
+  padding: 10px 12px;
+  font-size: 13.5px;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+}
+.ended > svg {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  margin-top: 1px;
+  color: var(--text-3);
+}
+.ended > div {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.ended p {
+  margin: 0;
+}
+.ended small {
+  font-size: 12px;
+  color: var(--text-2);
+}
+.failed {
+  background: var(--danger-soft);
+  border-color: color-mix(in srgb, var(--danger) 30%, transparent);
+}
+.failed > svg {
+  color: var(--danger);
+}
+.endedActs {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 4px;
+}
+.retry {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 12px;
+  border-radius: 9px;
+  border: 1px solid transparent;
+  color: var(--saffron);
+  background: var(--saffron-soft);
+  font-size: 13px;
+  font-weight: 600;
+}
+.retry:hover {
+  border-color: color-mix(in srgb, var(--saffron) 40%, transparent);
+}
+.retry svg {
+  width: 14px;
+  height: 14px;
+}
+
+@media (max-width: 860px) {
+  .card {
+    padding: 12px 12px 8px;
+  }
+  .stop,
+  .retry {
+    height: 40px;
+  }
+  .runLink {
+    padding: 10px 8px;
+  }
+}

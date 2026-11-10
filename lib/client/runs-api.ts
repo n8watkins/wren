@@ -1,3 +1,4 @@
+import type { ChatMessage, ChatSummary } from '@/agent/chats'
 import type { UsageSnapshot } from '@/lib/limits'
 import type { RunDetail, RunStreamEvent, RunSummary } from '@/lib/research'
 import { ApiError, failure, request } from './api'
@@ -14,6 +15,12 @@ export const runsApi = {
   list: () => request<{ runs: RunSummary[] }>('/api/runs').then((r) => r.runs),
   start: (question: string) => request<{ run: RunSummary; usage: UsageSnapshot }>('/api/runs', json({ question })),
   get: (id: string) => request<{ run: RunDetail }>(`/api/runs/${encodeURIComponent(id)}`).then((r) => r.run),
+  /** "Research" from chat: the run, the chat (new if chatId is left out), your question and Wren's message for the run. */
+  startInChat: (question: string, chatId: string | null) =>
+    request<{ chat: ChatSummary; userMessage: ChatMessage; message: ChatMessage; run: RunSummary; usage: UsageSnapshot }>(
+      '/api/chat/research',
+      json({ question, chatId: chatId ?? undefined })
+    ),
   cancel: (id: string) =>
     request<{ run: RunDetail }>(`/api/runs/${encodeURIComponent(id)}/cancel`, { method: 'POST' }).then((r) => r.run),
 }

@@ -1,16 +1,34 @@
 'use client'
 
 import { useEffect, useRef, type KeyboardEvent } from 'react'
-import { SIZE_LIMITS } from '@/lib/limits'
+import { RESEARCH_LIMITS, SIZE_LIMITS } from '@/lib/limits'
 import { Icon } from '../Icons'
 import type { VoiceView } from './useVoice'
 import { VoicePanel } from './VoicePanel'
+
+/** Research mode in the composer: on, and how many of today's runs are left. */
+export interface ComposerResearch {
+  on: boolean
+  left: number
+  limit: number
+  starting: boolean
+}
+
+/** The line under the composer in research mode. */
+function researchHint(research: ComposerResearch, tooLong: boolean): string {
+  if (tooLong) return `A research question is up to ${RESEARCH_LIMITS.questionChars} characters.`
+  if (research.left <= 0) return 'No research runs left today. They come back at midnight UTC.'
+  return `Wren searches the web, reads the pages and cites them. ${research.left} of ${research.limit} runs left today.`
+}
 
 /**
  * The composer: typing and the mic always side by side, plus Research. On a
  * desktop it is the boxed composer; on a phone the rounded bar with the big
  * mic within thumb reach (globals.css shows one or the other). While Wren is
  * listening, the listening view sits on top and typing still works.
+ *
+ * Research turns the composer into research mode (saffron): what you send
+ * starts a research run in this chat instead of a message.
  */
 export function Composer({
   draft,
@@ -22,6 +40,8 @@ export function Composer({
   onSend,
   onStop,
   onExplain,
+  research,
+  onResearch,
   voice,
   onMic,
   focusKey,
@@ -35,6 +55,9 @@ export function Composer({
   onSend: () => void
   onStop: () => void
   onExplain: (id: 'research' | 'memory') => void
+  research: ComposerResearch
+  /** Turns research mode on or off (a guest is asked to sign in). */
+  onResearch: () => void
   /** The voice session, while there is one. */
   voice: VoiceView | null
   /** Starts talking, or ends it. */
@@ -43,7 +66,12 @@ export function Composer({
 }) {
   const desk = useRef<HTMLTextAreaElement>(null)
   const phone = useRef<HTMLTextAreaElement>(null)
-  const canSend = draft.trim().length > 0 && !busy
+  const question = draft.trim()
+  const researching = research.on && !voice
+  const tooLong = researching && question.length > RESEARCH_LIMITS.questionChars
+  const canSend = researching
+    ? question.length >= 3 && !tooLong && !busy && !research.starting && research.left > 0
+    : question.length > 0 && !busy
 
   useEffect(() => {
     for (const el of [desk.current, phone.current]) {
@@ -81,7 +109,19 @@ export function Composer({
     </div>
   ) : null
 
-  const sendOrStop = busy ? (
+  const sendOrStop = researching ? (
+    <button
+      type="button"
+      className={canSend ? 'send go res' : 'send res'}
+      onClick={onSend}
+      disabled={!canSend}
+      aria-label="Start research"
+      title="Start research"
+      data-testid="send"
+    >
+      <Icon name="res" />
+    </button>
+  ) : busy ? (
     <button type="button" className="send stop" onClick={onStop} aria-label="Stop answering" data-testid="stop">
       <Icon name="stop" />
     </button>
@@ -113,13 +153,20 @@ export function Composer({
     </button>
   )
   const panel = voice ? <VoicePanel view={voice} onEnd={onMic} /> : null
+  const placeholder = researching ? 'What should Wren research?' : null
+  const researchToggle = {
+    onClick: onResearch,
+    'aria-pressed': researching,
+    'data-tip': 'res',
+    'data-testid': 'research-toggle',
+  } as const
 
   return (
     <>
       <div className="composer">
         {alert}
         {panel}
-        <div className="cbox">
+        <div className={researching ? 'cbox research' : 'cbox'}>
           <label className="sr-only" htmlFor="composer-desk">
             Message Wren
           </label>
@@ -129,7 +176,7 @@ export function Composer({
             rows={1}
             value={draft}
             maxLength={SIZE_LIMITS.messageChars}
-            placeholder={voice ? 'Type to Wren while you talk' : 'Message Wren, or tap the mic and just talk'}
+            placeholder={placeholder ?? (voice ? 'Type to Wren while you talk' : 'Message Wren, or tap the mic and just talk')}
             onChange={(event) => setDraft(event.target.value)}
             onKeyDown={onKeyDown}
             data-testid="composer"
@@ -138,8 +185,8 @@ export function Composer({
             <button type="button" className="cbtn icon" onClick={() => onExplain('memory')} aria-label="Attach a file (next update)">
               <Icon name="clip" />
             </button>
-            <button type="button" className="cbtn res" onClick={() => onExplain('research')} data-tip="res">
-              <Icon name="res" />
+            <button type="button" className={researching ? 'cbtn res on' : 'cbtn res'} {...researchToggle}>
+              <Icon name={researching ? 'check' : 'res'} />
               Research
             </button>
             <span className="sp" />
@@ -147,13 +194,20 @@ export function Composer({
             {sendOrStop}
           </div>
         </div>
-        <div className="hint">Wren can be wrong. Check anything that matters.</div>
+        <div className={researching ? 'hint res' : 'hint'} data-testid={researching ? 'research-hint' : undefined}>
+          {researching ? researchHint(research, tooLong) : 'Wren can be wrong. Check anything that matters.'}
+        </div>
       </div>
       <div className="mcomp">
         {alert}
         {panel}
-        <div className="mcb">
-          <button type="button" className="rb" onClick={() => onExplain('research')} aria-label="Research (next update)" data-tip="res">
+        {researching && (
+          <div className="mhint res" data-testid="research-hint">
+            {researchHint(research, tooLong)}
+          </div>
+        )}
+        <div className={researching ? 'mcb research' : 'mcb'}>
+          <button type="button" className={researching ? 'rb on' : 'rb'} aria-label="Research" {...researchToggle}>
             <Icon name="res" />
           </button>
           <label className="sr-only" htmlFor="composer-phone">
@@ -165,13 +219,13 @@ export function Composer({
             rows={1}
             value={draft}
             maxLength={SIZE_LIMITS.messageChars}
-            placeholder={voice ? 'Type while you talk' : 'Message or talk'}
+            placeholder={placeholder ?? (voice ? 'Type while you talk' : 'Message or talk')}
             onChange={(event) => setDraft(event.target.value)}
             onKeyDown={onKeyDown}
             data-testid="composer-phone"
           />
           {mic}
-          {(busy || draft.trim()) && sendOrStop}
+          {(busy || researching || draft.trim()) && sendOrStop}
         </div>
       </div>
     </>

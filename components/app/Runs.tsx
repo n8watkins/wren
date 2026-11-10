@@ -4,14 +4,15 @@ import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from 'react'
 import { ApiError } from '@/lib/client/api'
-import { runsApi, watchRun } from '@/lib/client/runs-api'
+import { runsApi } from '@/lib/client/runs-api'
 import { errorMessage } from '@/lib/errors'
 import { DAILY_LIMITS, RESEARCH_LIMITS, type UsageSnapshot } from '@/lib/limits'
-import { RUN_FAILURES, isActive, linkCitations, type RunDetail, type RunSource, type RunStatus, type RunStep, type RunSummary } from '@/lib/research'
-import { Icon, type IconName } from '../Icons'
+import { RUN_FAILURES, isActive, linkCitations, type RunSummary } from '@/lib/research'
+import { Icon } from '../Icons'
 import { Markdown } from '../Markdown'
 import { WrenMark } from '../WrenMark'
 import type { Person } from './Chrome'
+import { Sources, StatusBadge, StepLine, stepsSummary, useRunWatch } from './RunParts'
 import styles from './Runs.module.css'
 
 /**
@@ -20,16 +21,6 @@ import styles from './Runs.module.css'
  * finished report with its numbered sources. Saffron is research's colour.
  */
 
-const STATUS: Record<RunStatus, string> = {
-  planning: 'Planning searches',
-  searching: 'Searching',
-  reading: 'Reading pages',
-  writing: 'Writing the report',
-  done: 'Done',
-  failed: 'Stopped',
-  cancelled: 'Cancelled',
-}
-
 function ago(at: number, now: number): string {
   const minutes = Math.round((now - at) / 60_000)
   if (minutes < 1) return 'just now'
@@ -37,16 +28,6 @@ function ago(at: number, now: number): string {
   const hours = Math.round(minutes / 60)
   if (hours < 24) return `${hours} h ago`
   return new Date(at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
-}
-
-function StatusBadge({ status }: { status: RunStatus }) {
-  const tone = isActive(status) ? styles.live : status === 'done' ? styles.done : status === 'failed' ? styles.failedBadge : styles.muted
-  return (
-    <span className={`${styles.badge} ${tone}`} data-testid="run-status">
-      {isActive(status) && <span className={styles.pulse} aria-hidden="true" />}
-      {STATUS[status]}
-    </span>
-  )
 }
 
 /* ---------- starting a run ---------- */
@@ -209,83 +190,6 @@ function RunList({ usage, onUsage }: { usage: UsageSnapshot; onUsage: (usage: Us
 
 /* ---------- one run ---------- */
 
-const STEP_ICONS: Record<RunStep['kind'], IconName> = {
-  plan: 'right',
-  search: 'res',
-  read: 'check',
-  skip: 'x',
-  note: 'stop',
-  write: 'chat',
-  error: 'alert',
-}
-
-function StepLine({ step }: { step: RunStep }) {
-  const label =
-    step.kind === 'search' ? (
-      <>Searched &ldquo;{step.label}&rdquo;</>
-    ) : step.kind === 'read' && step.url ? (
-      <>
-        Read{' '}
-        <a href={step.url} target="_blank" rel="noopener noreferrer nofollow ugc">
-          {step.label}
-        </a>
-      </>
-    ) : step.kind === 'skip' ? (
-      <>Skipped {step.label}</>
-    ) : (
-      step.label
-    )
-  return (
-    <li className={`${styles.step} ${styles[`k_${step.kind}`] ?? ''}`} data-testid="run-step" data-kind={step.kind}>
-      <span className={styles.stepIcon} aria-hidden="true">
-        <Icon name={STEP_ICONS[step.kind]} />
-      </span>
-      <div className={styles.stepBody}>
-        <span className={styles.stepLabel}>{label}</span>
-        {step.kind === 'plan' && step.detail ? (
-          <ol className={styles.queries}>
-            {step.detail.split('\n').map((query) => (
-              <li key={query}>{query}</li>
-            ))}
-          </ol>
-        ) : (
-          step.detail && <span className={styles.stepDetail}>{step.detail}</span>
-        )}
-      </div>
-    </li>
-  )
-}
-
-function stepsSummary(run: RunDetail): string {
-  const count = (kind: RunStep['kind']) => run.steps.filter((s) => s.kind === kind).length
-  const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`
-  const parts = [plural(count('search'), 'search', 'searches'), plural(count('read'), 'page read', 'pages read')]
-  const skipped = count('skip')
-  if (skipped) parts.push(`${skipped} skipped`)
-  return parts.join(' · ')
-}
-
-function Sources({ sources }: { sources: RunSource[] }) {
-  return (
-    <ol className={styles.sources} data-testid="run-sources">
-      {sources.map((source) => (
-        <li key={source.n} id={`source-${source.n}`} className={source.cited ? undefined : styles.uncited} data-testid="run-source">
-          <span className={styles.num}>{source.n}</span>
-          <div>
-            <a href={source.url} target="_blank" rel="noopener noreferrer nofollow ugc">
-              {source.title}
-            </a>
-            <small>
-              {source.host}
-              {!source.cited && ' · not cited'}
-            </small>
-          </div>
-        </li>
-      ))}
-    </ol>
-  )
-}
-
 function RunView({
   id,
   usage,
@@ -298,56 +202,27 @@ function RunView({
   onRefreshUsage: () => void
 }) {
   const router = useRouter()
-  const [run, setRun] = useState<RunDetail | null>(null)
-  const [error, setError] = useState<{ message: string; missing: boolean } | null>(null)
+  // A failed run gives the day's run back: show it in the meter.
+  const watched = useRunWatch(id, true, (ended) => {
+    if (ended.status === 'failed') onRefreshUsage()
+  })
+  const { run, setRun } = watched
+  const [actionError, setActionError] = useState<string | null>(null)
+  const error = watched.error
+    ? { message: watched.error.message, missing: watched.error.code === 'run_not_found' }
+    : actionError
+      ? { message: actionError, missing: false }
+      : null
   const [cancelling, setCancelling] = useState(false)
   const [copied, setCopied] = useState(false)
   const [retrying, setRetrying] = useState(false)
-  const refreshUsage = useRef(onRefreshUsage)
-  useEffect(() => {
-    refreshUsage.current = onRefreshUsage
-  }, [onRefreshUsage])
-
-  // Watch the run: one stream for as long as it goes, opened again if it drops.
-  useEffect(() => {
-    const controller = new AbortController()
-    let wait = 1_000
-    void (async () => {
-      while (!controller.signal.aborted) {
-        let last: RunDetail | null = null
-        try {
-          for await (const detail of watchRun(id, controller.signal)) {
-            last = detail
-            wait = 1_000
-            setError(null)
-            setRun(detail)
-          }
-        } catch (failure) {
-          if (controller.signal.aborted) return
-          if (failure instanceof ApiError && (failure.code === 'run_not_found' || failure.code === 'unauthorized')) {
-            setError({ message: failure.message, missing: failure.code === 'run_not_found' })
-            return
-          }
-        }
-        if (controller.signal.aborted) return
-        if (last && !isActive(last.status)) {
-          // A failed run gives the day's run back: show it in the meter.
-          if (last.status === 'failed') refreshUsage.current()
-          return
-        }
-        await new Promise((resolve) => setTimeout(resolve, wait))
-        wait = Math.min(wait * 2, 15_000)
-      }
-    })()
-    return () => controller.abort()
-  }, [id])
 
   const cancel = async () => {
     setCancelling(true)
     try {
       setRun(await runsApi.cancel(id))
     } catch (failure) {
-      setError({ message: failure instanceof ApiError ? failure.message : errorMessage('internal'), missing: false })
+      setActionError(failure instanceof ApiError ? failure.message : errorMessage('internal'))
     } finally {
       setCancelling(false)
     }
@@ -361,7 +236,7 @@ function RunView({
       onUsage(started.usage)
       router.push(`/runs/${started.run.id}`)
     } catch (failure) {
-      setError({ message: failure instanceof ApiError ? failure.message : errorMessage('internal'), missing: false })
+      setActionError(failure instanceof ApiError ? failure.message : errorMessage('internal'))
       setRetrying(false)
     }
   }
@@ -479,7 +354,7 @@ function RunView({
         <summary>
           <span className={styles.summaryText}>
             <span>{active ? 'What Wren is doing' : 'How Wren researched this'}</span>
-            <small>{stepsSummary(run)}</small>
+            <small>{stepsSummary(run.steps)}</small>
           </span>
           <Icon name="down" className={styles.caret} />
         </summary>

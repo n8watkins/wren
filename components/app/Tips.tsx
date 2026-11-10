@@ -16,8 +16,8 @@ import { Icon } from '../Icons'
  */
 const TIPS: { id: string; explainer: ExplainerId; text: string; side: 'above' | 'right' }[] = [
   { id: 'mic', explainer: 'mic', text: 'Tap the mic to talk instead of typing. Talk over Wren to interrupt; every word lands in the chat.', side: 'above' },
-  { id: 'res', explainer: 'research', text: 'Research reads the web for you and cites only the pages it opened. Start a run in Research runs.', side: 'above' },
-  { id: 'mem', explainer: 'memory', text: 'Add notes, files and links to your memory here. Soon Wren will quote them in answers.', side: 'right' },
+  { id: 'res', explainer: 'research', text: 'Turn on Research and ask: Wren reads the web and writes a report into the chat, citing only the pages it opened.', side: 'above' },
+  { id: 'mem', explainer: 'memory', text: 'Add notes, files and links to your memory here. Wren uses them when they matter to what you ask.', side: 'right' },
   { id: 'meter', explainer: 'meter', text: "This is today's share of the demo key. Sign in for 10x more messages, or add your own key to remove the limit.", side: 'above' },
 ]
 
