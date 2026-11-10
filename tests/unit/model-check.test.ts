@@ -71,11 +71,11 @@ function env(overrides: Record<string, string | undefined> = {}): CloudflareEnv 
   } as unknown as CloudflareEnv
 }
 
-/** Every probe but Live, which needs the Workers runtime's WebSocket fetch (covered end to end in tests/e2e/model-check.spec.ts). */
+/** Every probe but Live, which needs the Workers runtime's WebSocket fetch (covered end to end in tests/e2e/model-check-api.spec.ts). */
 function runWithoutLive(e: CloudflareEnv, timeoutMs?: number) {
   return runProbes(
     probesFor(e).filter((p) => p.name !== 'live'),
-    { timeoutMs }
+    { timeoutMs, retryDelayMs: 0 }
   )
 }
 
@@ -95,6 +95,28 @@ describe('the daily model check', () => {
     expect(seen.filter((call) => /ok-fallback:generateContent/.test(call.path))).toHaveLength(1)
   })
 
+  it('tries a failed call once more, so a one-off blip does not hold health red for a day', async () => {
+    let tries = 0
+    const flaky: Probe = {
+      name: 'chat',
+      target: 'm',
+      run: async () => {
+        tries++
+        if (tries === 1) throw new GeminiError('upstream_error', 503)
+      },
+    }
+    const run = await runProbes([flaky], { retryDelayMs: 0 })
+    expect(tries).toBe(2)
+    expect(run.results.chat).toEqual({ target: 'm', ok: true, ms: expect.any(Number), attempts: 2 })
+  })
+
+  it('calls a dependency that answers the first time only once', async () => {
+    let tries = 0
+    const run = await runProbes([{ name: 'chat', target: 'm', run: async () => void tries++ }])
+    expect(tries).toBe(1)
+    expect(run.results.chat).toEqual({ target: 'm', ok: true, ms: expect.any(Number) })
+  })
+
   it('includes a Live probe for the configured model', () => {
     const live = probesFor(env()).find((p) => p.name === 'live')
     expect(live).toMatchObject({ target: 'live-model', skip: undefined })
@@ -102,7 +124,7 @@ describe('the daily model check', () => {
 
   it('reports a failing model with a short code and status, without trying the fallback in its place', async () => {
     const run = await runWithoutLive(env({ GEMINI_MODEL: 'down-chat' }))
-    expect(run.results.chat).toMatchObject({ ok: false, code: 'upstream_error', status: 500, target: 'down-chat' })
+    expect(run.results.chat).toMatchObject({ ok: false, code: 'upstream_error', status: 500, target: 'down-chat', attempts: 2 })
     expect(run.results.googleSearch).toMatchObject({ ok: false, code: 'upstream_error', status: 500 })
     expect(run.results.chatFallback).toMatchObject({ ok: true })
   })
@@ -145,8 +167,8 @@ describe('the daily model check', () => {
         throw Object.assign(new GeminiError('demo_unavailable', 403), { message: 'API key AIzaSECRET not valid' })
       },
     }
-    const run = await runProbes([probe])
-    expect(run.results.chat).toEqual({ target: 'm', ok: false, ms: expect.any(Number), code: 'demo_unavailable', status: 403 })
+    const run = await runProbes([probe], { retryDelayMs: 0 })
+    expect(run.results.chat).toEqual({ target: 'm', ok: false, ms: expect.any(Number), code: 'demo_unavailable', status: 403, attempts: 2 })
     expect(JSON.stringify(run)).not.toContain('AIza')
   })
 })

@@ -23,6 +23,8 @@ import {
 
 /** How long each call may take before it counts as failed. */
 const PROBE_MS = 20_000
+/** The pause before a failed call is tried once more. */
+const RETRY_DELAY_MS = 10_000
 
 /** A failure the check itself noticed, with its own code. */
 class ProbeFailure extends Error {
@@ -136,8 +138,20 @@ function failure(error: unknown): Pick<ProbeResult, 'code' | 'status'> {
   return { code: 'error' }
 }
 
-async function runProbe(probe: Probe, timeoutMs: number): Promise<ProbeResult> {
+/**
+ * One probe, tried a second time after a pause when the first try fails: a
+ * run holds health for a day, so a one-off blip shouldn't page, while a model
+ * that is really down fails both.
+ */
+async function runProbe(probe: Probe, timeoutMs: number, retryDelayMs: number): Promise<ProbeResult> {
   if (probe.skip) return { target: probe.target, ok: null, ms: 0, code: probe.skip }
+  const first = await attempt(probe, timeoutMs)
+  if (first.ok) return first
+  await new Promise((resolve) => setTimeout(resolve, retryDelayMs))
+  return { ...(await attempt(probe, timeoutMs)), attempts: 2 }
+}
+
+async function attempt(probe: Probe, timeoutMs: number): Promise<ProbeResult> {
   const controller = new AbortController()
   const started = Date.now()
   let timer: ReturnType<typeof setTimeout> | undefined
@@ -160,11 +174,15 @@ async function runProbe(probe: Probe, timeoutMs: number): Promise<ProbeResult> {
   }
 }
 
-/** Runs every probe at once; one that takes longer than `timeoutMs` fails as "timeout". */
-export async function runProbes(probes: Probe[], options: { timeoutMs?: number; now?: () => number } = {}): Promise<ModelCheckRun> {
+/** Runs every probe at once; a try that takes longer than `timeoutMs` fails as "timeout". */
+export async function runProbes(
+  probes: Probe[],
+  options: { timeoutMs?: number; retryDelayMs?: number; now?: () => number } = {}
+): Promise<ModelCheckRun> {
   const ranAt = (options.now ?? Date.now)()
   const timeoutMs = options.timeoutMs ?? PROBE_MS + 5_000
-  const results = await Promise.all(probes.map(async (probe) => [probe.name, await runProbe(probe, timeoutMs)] as const))
+  const retryDelayMs = options.retryDelayMs ?? RETRY_DELAY_MS
+  const results = await Promise.all(probes.map(async (probe) => [probe.name, await runProbe(probe, timeoutMs, retryDelayMs)] as const))
   return { ranAt, results: Object.fromEntries(results) }
 }
 

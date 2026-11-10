@@ -29,6 +29,8 @@ export interface ProbeResult {
   code?: string
   /** The upstream HTTP status (or WebSocket close code), when there was one. */
   status?: number
+  /** 2 when the first try failed and this is the second (agent/model-check.ts). */
+  attempts?: number
 }
 
 export interface ModelCheckRun {
