@@ -120,6 +120,12 @@ export const VOICE_LIMITS = {
   controlChars: SIZE_LIMITS.messageChars + SIZE_LIMITS.apiKeyChars + 200,
   /** Earlier messages of the chat given to Gemini Live as context. */
   historyChars: 20_000,
+  /** How long a memory tool (search_memory, save_to_memory) may take before Wren is told it failed: the model waits, silent, meanwhile. */
+  memoryToolMs: 5_000,
+  /** Memory tool calls in one spoken turn; more get an error, so a turn can't run up memory calls. */
+  memoryToolsPerTurn: 3,
+  /** Characters of one memory Wren is given back from search_memory (it speaks, so it needs little). */
+  memoryResultChars: 600,
 } as const
 
 

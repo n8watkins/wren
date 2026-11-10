@@ -412,6 +412,8 @@ export function WrenApp({ person, github, initialChats, initialUsage, guestSiteK
       }
       setMessages((list) => (list.some((m) => m.id === message.id) ? list : [...list, message]))
     },
+    // Memory's chips and "Saved to Memory" lines on spoken turns, as they're known.
+    onMarks: (messageId, memory) => setMessages((list) => list.map((m) => (m.id === messageId ? { ...m, memory: memory ?? undefined } : m))),
     onUsage: setUsage,
     onEnded: (problem) => {
       voiceChatRef.current = null

@@ -352,6 +352,10 @@ export interface LiveEvents {
   turnComplete(): void
   /** Gemini will close the connection soon (it lasts about 10 minutes). */
   goAway(): void
+  /** Wren wants one of the session's tools run; answer each with sendToolResponse. */
+  toolCall(calls: LiveToolCall[]): void
+  /** Calls Gemini no longer wants answered (the person talked over Wren). */
+  toolCancelled(ids: string[]): void
   /** The connection closed; `failure` when it wasn't closed by us. */
   closed(failure?: GeminiError): void
 }
@@ -361,7 +365,28 @@ export interface LiveSession {
   sendAudio(pcm: Uint8Array): void
   /** A typed message; Wren answers it out loud. */
   sendText(text: string): void
+  /** The result of a tool call, as `{ output }` or `{ error }`. */
+  sendToolResponse(response: LiveToolResponse): void
   close(): void
+}
+
+/** A function the Live model may call (a FunctionDeclaration; types in Gemini's schema subset). */
+export interface LiveTool {
+  name: string
+  description: string
+  parameters: { type: 'OBJECT'; properties: Record<string, { type: 'STRING'; description: string }>; required: string[] }
+}
+
+export interface LiveToolCall {
+  id: string
+  name: string
+  args: Record<string, unknown>
+}
+
+export interface LiveToolResponse {
+  id: string
+  name: string
+  response: { output: unknown } | { error: string }
 }
 
 export interface LiveOptions {
@@ -371,6 +396,8 @@ export interface LiveOptions {
   systemPrompt: string
   /** The chat so far, given as context without asking for an answer. */
   history: { role: Role; text: string }[]
+  /** Functions the model may call during the session (sync: it waits for each answer). */
+  tools?: LiveTool[]
   /** How long Gemini may take to accept the session. */
   setupMs: number
   /** Tests point this at a local mock of the Gemini API. */
@@ -396,6 +423,8 @@ export function classifyLiveClose(code: number, reason: string, keySource: KeySo
 interface LiveServerMessage {
   setupComplete?: object
   goAway?: object
+  toolCall?: { functionCalls?: { id?: string; name?: string; args?: Record<string, unknown> }[] }
+  toolCallCancellation?: { ids?: string[] }
   serverContent?: {
     modelTurn?: { parts?: { inlineData?: { data?: string } }[] }
     inputTranscription?: { text?: string }
@@ -437,6 +466,7 @@ export async function connectLive(options: LiveOptions, events: LiveEvents): Pro
   const session: LiveSession = {
     sendAudio: (pcm) => send({ realtimeInput: { audio: { data: toBase64(pcm), mimeType: 'audio/pcm;rate=16000' } } }),
     sendText: (text) => send({ realtimeInput: { text } }),
+    sendToolResponse: (response) => send({ toolResponse: { functionResponses: [response] } }),
     close: () => {
       if (closedByUs) return
       closedByUs = true
@@ -491,6 +521,13 @@ export async function connectLive(options: LiveOptions, events: LiveEvents): Pro
       return
     }
     if (message.goAway) events.goAway()
+    if (ready && message.toolCall?.functionCalls?.length) {
+      const calls = message.toolCall.functionCalls
+        .filter((call) => call.id && call.name)
+        .map((call) => ({ id: call.id!, name: call.name!, args: call.args ?? {} }))
+      if (calls.length) events.toolCall(calls)
+    }
+    if (ready && message.toolCallCancellation?.ids?.length) events.toolCancelled(message.toolCallCancellation.ids)
     const content = message.serverContent
     if (!content || !ready) return
     // One message can carry several of these at once.
@@ -528,6 +565,7 @@ export async function connectLive(options: LiveOptions, events: LiveEvents): Pro
         outputAudioTranscription: {},
         // Keeps a long conversation inside the model's context instead of ending the session.
         contextWindowCompression: { slidingWindow: {} },
+        ...(options.tools?.length ? { tools: [{ functionDeclarations: options.tools }] } : {}),
         ...(options.history.length ? { historyConfig: { initialHistoryInClientContent: true } } : {}),
       },
     })
