@@ -252,14 +252,14 @@ export class ChatMemory {
    * the answer names count. Returns all its chips, or null when none were added.
    */
   async attribute(
-    input: RequestFrom & { chatId: string; answerId: string; answer: string; facts: Memory[]; recalled: RecalledMemory[] }
+    input: RequestFrom & { chatId: string; answerId: string; message: string; answer: string; facts: Memory[]; recalled: RecalledMemory[] }
   ): Promise<RecalledMemory[] | null> {
     const shown = new Set(input.recalled.map((chip) => chip.id))
     const candidates = input.facts.filter((fact) => !shown.has(fact.id))
     if (!candidates.length) return null
     let judged: Memory[]
     try {
-      judged = await this.engineFor(input.userKey, input.ip).factsUsed(input.answer, candidates)
+      judged = await this.engineFor(input.userKey, input.ip).factsUsed(input.message, input.answer, candidates)
     } catch (error) {
       log.warn('memory.attribution_failed', { code: error instanceof MemoryAiError ? error.code : 'internal' })
       judged = usedFacts(input.answer, candidates)

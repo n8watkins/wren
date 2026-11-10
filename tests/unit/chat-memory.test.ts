@@ -136,7 +136,7 @@ describe('recall', () => {
     expect(given.recalled).toEqual([])
     expect(calls.filter((c) => c.kind === 'embed')).toHaveLength(1)
 
-    expect(await chatMemory.attribute({ ...from, chatId: chat.id, answerId: answer.id, answer: 'How about a chicken stir-fry?', facts: given.facts, recalled: [] })).toBeNull()
+    expect(await chatMemory.attribute({ ...from, chatId: chat.id, answerId: answer.id, message: 'Dinner ideas?', answer: 'How about a chicken stir-fry?', facts: given.facts, recalled: [] })).toBeNull()
   })
 
   it('chips the facts Gemini says the answer took into account, even when it doesn’t name them', async () => {
@@ -145,7 +145,7 @@ describe('recall', () => {
     await library.rememberFacts([{ id: 'x', text: 'I am vegetarian.' }])
     const answer = addMessage(sql, chat.id, 'model', '')
     const given = await chatMemory.recall({ ...from, chatId: chat.id, answerId: answer.id, text: 'Can you suggest a dinner I could make tonight?' })
-    const chips = await chatMemory.attribute({ ...from, chatId: chat.id, answerId: answer.id, answer: 'A chickpea curry is quick.', facts: given.facts, recalled: [] })
+    const chips = await chatMemory.attribute({ ...from, chatId: chat.id, answerId: answer.id, message: 'Dinner ideas?', answer: 'A chickpea curry is quick.', facts: given.facts, recalled: [] })
     expect(chips).toEqual([{ id: given.facts[0].id, kind: 'fact', label: 'Is vegetarian.' }])
     expect(chatMemory.forChat(chat.id).get(answer.id)).toEqual({ recalled: chips })
   })
@@ -155,7 +155,7 @@ describe('recall', () => {
     await library.rememberFacts([{ id: 'x', text: 'I am vegetarian.' }])
     const answer = addMessage(sql, chat.id, 'model', '')
     const given = await chatMemory.recall({ ...from, chatId: chat.id, answerId: answer.id, text: 'Dinner ideas for tonight please' })
-    const attribute = (text: string) => chatMemory.attribute({ ...from, chatId: chat.id, answerId: answer.id, answer: text, facts: given.facts, recalled: [] })
+    const attribute = (text: string) => chatMemory.attribute({ ...from, chatId: chat.id, answerId: answer.id, message: 'Dinner ideas?', answer: text, facts: given.facts, recalled: [] })
     expect(await attribute('A chickpea curry is quick.')).toBeNull()
     expect(await attribute('A vegetarian chickpea curry is quick.')).toHaveLength(1)
   })

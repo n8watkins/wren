@@ -116,20 +116,21 @@ function Library({
   const [searching, setSearching] = useState(false)
 
   // A memory a chat linked to (/memory#m-<id>): scrolled to and marked once the list is in.
+  // Read once the list is in, not on mount: a client-side navigation commits
+  // the address (and its #m-<id>) after this page first renders.
   const [focusId, setFocusId] = useState<string | null>(null)
+  const loaded = memories !== null
   useEffect(() => {
+    if (!loaded) return
     const read = () => {
-      const match = /^#m-([0-9a-f-]{36})$/.exec(window.location.hash)
-      setFocusId(match ? match[1] : null)
+      const id = /^#m-([0-9a-f-]{36})$/.exec(window.location.hash)?.[1] ?? null
+      setFocusId(id)
+      if (id) document.getElementById(`m-${id}`)?.scrollIntoView({ block: 'center' })
     }
     read()
     window.addEventListener('hashchange', read)
     return () => window.removeEventListener('hashchange', read)
-  }, [])
-  useEffect(() => {
-    if (!focusId || !memories) return
-    document.getElementById(`m-${focusId}`)?.scrollIntoView({ block: 'center' })
-  }, [focusId, memories])
+  }, [loaded])
 
   const [attempt, setAttempt] = useState(0)
   useEffect(() => {

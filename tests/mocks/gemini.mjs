@@ -144,7 +144,8 @@ function memoryCall(req, res, body) {
   const text = parts.map((p) => p.text ?? '').join('\n')
   const system = body.systemInstruction?.parts?.map((p) => p.text).join(' ') ?? ''
   if (system.startsWith('You check which facts')) {
-    const [answerPart, factPart = ''] = text.split('\n\nFacts:\n')
+    const [head, factPart = ''] = text.split('\n\nFacts:\n')
+    const answerPart = head.split('\n\nAnswer:\n')[1] ?? head
     const words = new Set(answerPart.toLowerCase().match(/[a-z]{5,}/g) ?? [])
     const used = [...factPart.matchAll(/^\[(f\d+)\] (.*)$/gm)]
       .filter(([, , fact]) => (fact.toLowerCase().match(/[a-z]{5,}/g) ?? []).some((w) => words.has(w)))

@@ -192,7 +192,7 @@ export class WrenAgent extends Agent<Cloudflare.Env> {
       // facts from the person's message (not again on a regenerate: nothing new was said).
       after: async () => {
         const events: ChatStreamEvent[] = []
-        const chips = await memory.attribute({ ...from, chatId, answerId: answer.id, answer: answerText, facts: given.facts, recalled: given.recalled })
+        const chips = await memory.attribute({ ...from, chatId, answerId: answer.id, message: userMessage.content, answer: answerText, facts: given.facts, recalled: given.recalled })
         if (chips) events.push({ t: 'recall', messageId: answer.id, memories: chips })
         if (!request.regenerate) {
           const saves = await this.rememberFromChat(chatId, userMessage.id, from)
