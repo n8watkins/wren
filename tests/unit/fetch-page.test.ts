@@ -37,7 +37,8 @@ describe('which addresses may be fetched', () => {
     ['file:///etc/passwd', 'not_web_address'],
     ['javascript:alert(1)', 'not_web_address'],
     ['data:text/html,<script>', 'not_web_address'],
-    ['https://user:pass@example.com/', 'not_web_address'],
+    // An address with a user name in it (and, by the same rule, a password).
+    ['https://someone@example.com/', 'not_web_address'],
     ['https://example.com:22/', 'not_web_address'],
     ['not a url', 'not_web_address'],
     ['http://localhost/', 'private_address'],
