@@ -2121,10 +2121,12 @@ svg.wren.talking .head {
   }
   .saved .st {
     flex: 1;
-    line-height: 44px;
+    line-height: 32px;
   }
+  /* 44 px to tap, overlapping the pill's edges so the row stays 32 px. */
   .saved button {
     min-height: 44px;
+    margin: -6px 0;
     padding: 0 12px;
   }
   .saved button.why {
@@ -2134,11 +2136,12 @@ svg.wren.talking .head {
   .saved .fact {
     order: 1;
     flex-basis: 100%;
-    margin: -16px 0 0;
-    padding: 16px 12px 0 0;
-    line-height: 28px;
+    margin: -10px 0 -4px;
+    padding: 10px 12px 10px 0;
+    line-height: 24px;
   }
   .saved {
+    padding-top: 6px;
     padding-bottom: 6px;
   }
   .saved .fact::before {
