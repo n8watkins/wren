@@ -1503,6 +1503,10 @@ svg.wren.talking .head {
 .demo.inbox {
   margin: 0 0 4px;
 }
+/* In "How Wren works" the box sits above the step cards: the same gap as theirs, plus a little. */
+.mtop + .demo.inbox {
+  margin-bottom: 14px;
+}
 .keyhow {
   margin: 0;
   padding-left: 20px;
@@ -1938,8 +1942,9 @@ svg.wren.talking .head {
     max-width: 692px;
     margin: 0 auto;
   }
-  dialog.dialog,
-  dialog.dialog.narrow {
+  /* html: the phone sheet rules come later in this file. */
+  html dialog.dialog,
+  html dialog.dialog.narrow {
     max-width: 640px;
     margin: auto auto 0;
   }
@@ -2067,7 +2072,8 @@ svg.wren.talking .head {
     height: 44px;
     margin-right: 0;
   }
-  .btn {
+  /* .app: the base .btn rule comes later in this file. */
+  .app .btn {
     height: 44px;
   }
   .mmenu .who small button {
@@ -2128,9 +2134,12 @@ svg.wren.talking .head {
   .saved .fact {
     order: 1;
     flex-basis: 100%;
-    margin: -10px 0 0;
-    padding: 10px 12px 0 0;
-    line-height: 34px;
+    margin: -16px 0 0;
+    padding: 16px 12px 0 0;
+    line-height: 28px;
+  }
+  .saved {
+    padding-bottom: 6px;
   }
   .saved .fact::before {
     content: none;

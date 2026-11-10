@@ -498,8 +498,8 @@
   /* A source's whole title line is its link. */
   .sources a {
     display: block;
-    padding: 9px 0;
-    margin: -9px 0;
+    padding: 12px 0;
+    margin: -12px 0;
   }
 }
 
