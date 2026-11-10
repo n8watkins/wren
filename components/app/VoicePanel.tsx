@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { Icon } from '../Icons'
 import { WrenMark, type WrenState } from '../WrenMark'
 import type { VoiceView } from './useVoice'
+import { VOICE_REMINDER } from './DemoNotice'
 
 const LABELS = {
   connecting: 'Connecting…',
@@ -42,25 +43,37 @@ function Left({ left, ownKey }: { left: VoiceView['left']; ownKey: boolean }) {
   )
 }
 
-/** The listening view: what Wren is doing, the words so far, time left, and End. */
+/**
+ * The listening view: what Wren is doing, the words so far, time left, and
+ * End; on the demo key, the free-demo reminder under it (it can't be dismissed
+ * here: speech is easy to overshare).
+ */
 export function VoicePanel({ view, onEnd }: { view: VoiceView; onEnd: () => void }) {
   const hint = view.status === 'connecting' ? 'Opening the mic' : view.status === 'talking' ? 'Talk to interrupt' : 'Talk any time'
   return (
-    <div className="voice" role="status" data-testid="voice-panel" data-status={view.status}>
-      <span className="vmark" aria-hidden="true">
-        <WrenMark size={26} state={MARK[view.status]} />
-      </span>
-      <div className="vtext">
-        <b data-testid="voice-status">{LABELS[view.status]}</b>
-        <span className={view.interim ? `vline ${view.interim.role}` : 'vline'} data-testid="voice-interim">
-          <span>{view.interim ? view.interim.text : hint}</span>
+    <>
+      <div className="voice" role="status" data-testid="voice-panel" data-status={view.status}>
+        <span className="vmark" aria-hidden="true">
+          <WrenMark size={26} state={MARK[view.status]} />
         </span>
+        <div className="vtext">
+          <b data-testid="voice-status">{LABELS[view.status]}</b>
+          <span className={view.interim ? `vline ${view.interim.role}` : 'vline'} data-testid="voice-interim">
+            <span>{view.interim ? view.interim.text : hint}</span>
+          </span>
+        </div>
+        <Left left={view.left} ownKey={view.ownKey} />
+        <button type="button" className="vend" onClick={onEnd} data-testid="voice-end">
+          <Icon name="stop" />
+          End
+        </button>
       </div>
-      <Left left={view.left} ownKey={view.ownKey} />
-      <button type="button" className="vend" onClick={onEnd} data-testid="voice-end">
-        <Icon name="stop" />
-        End
-      </button>
-    </div>
+      {!view.ownKey && (
+        <p className="vdemo" data-testid="voice-demo-notice">
+          <Icon name="key" />
+          {VOICE_REMINDER}
+        </p>
+      )}
+    </>
   )
 }

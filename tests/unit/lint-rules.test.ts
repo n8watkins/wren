@@ -30,6 +30,11 @@ describe('lesson lint rules', { timeout: 60_000 }, () => {
     expect(hits.join()).toMatch(/CF-Connecting-IP/)
   })
 
+  it('rejects reading the country from the CF-IPCountry header', async () => {
+    const hits = await rulesHit("export const c = (r: Request) => r.headers.get('CF-IPCountry')\n")
+    expect(hits.join()).toMatch(/visitorRegion/)
+  })
+
   it('rejects a user id read from the request', async () => {
     const hits = await rulesHit('export const who = (body: { userId: string }) => body.userId\n', 'app/api/sample/route.ts')
     expect(hits.join()).toMatch(/verified session/)

@@ -58,5 +58,6 @@ function openNextResponse(request: Request, env: CloudflareEnv, ctx: ExecutionCo
   // script it renders. Any CSP header a client sent is replaced.
   const headers = new Headers(request.headers)
   headers.set('Content-Security-Policy', csp)
-  return (openNext as OpenNextHandler).fetch(new Request(request, { headers }), env, ctx)
+  // cf (the visitor's country, lib/server/region.ts) is passed on explicitly.
+  return (openNext as OpenNextHandler).fetch(new Request(request, { headers, cf: request.cf }), env, ctx)
 }

@@ -39,6 +39,8 @@ test('talk, hear Wren, see both turns saved, then end', async ({ page, baseURL }
   await expect(panel).toBeVisible()
   await expect(scope(page).getByTestId('mic')).toHaveAttribute('aria-pressed', 'true')
   await expect(scope(page).getByTestId('voice-left')).toHaveText(/^(10:00|9:\d\d) left$/)
+  // On the demo key, the free-demo reminder sits under the listening view.
+  await expect(scope(page).getByTestId('voice-demo-notice')).toContainText("please don't say personal details")
 
   // The spoken turn lands in a new chat, the person first.
   await expect(page.getByTestId('user-message')).toHaveText(['Hello Wren'], { timeout: 15_000 })

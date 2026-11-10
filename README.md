@@ -9,6 +9,12 @@ Research works from chat: turn on Research in the composer and ask, watch the ru
 Voice is in: tap the mic and talk with Wren through Gemini Live, interrupt it by talking, and every spoken turn lands in the same chat as text.
 Launch comes next.
 
+## Availability
+
+Wren is a free demo running on Google Gemini's free tier, and it works the same everywhere.
+Please don't share personal details (names, contact info, health, finances, anything private) with the demo; for real use, add your own Gemini key (it stays in your browser).
+Google's terms reserve the free tier from apps used in the EU/EEA, Switzerland and the UK, so visitors from there are asked more firmly to use their own key.
+
 ## Stack
 
 - Next.js 16 (App Router, Turbopack) on Cloudflare Workers through OpenNext.

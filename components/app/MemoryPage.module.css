@@ -590,3 +590,7 @@
     animation: none;
   }
 }
+
+.reminder {
+  margin: 0 0 12px;
+}
