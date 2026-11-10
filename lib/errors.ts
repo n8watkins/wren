@@ -49,6 +49,10 @@ export const ERRORS = {
   daily_limit_guest_ip: { status: 429, message: 'This network has used today’s guest messages. Sign in to keep going.' },
   guest_site_cap: { status: 429, message: 'Guest messages are used up for today; sign in to keep going.' },
   feature_not_ready: { status: 501, message: 'This is coming in the next update.' },
+  research_daily_limit_ip: {
+    status: 429,
+    message: 'This network has used today’s research runs. They come back at midnight UTC.',
+  },
   research_daily_limit: {
     status: 429,
     message: 'You’ve used today’s 3 research runs. They come back at midnight UTC.',

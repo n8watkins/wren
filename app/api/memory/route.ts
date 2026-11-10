@@ -2,6 +2,7 @@ import { agentFor } from '@/lib/server/agent'
 import { HttpError, errorResponse, jsonResponse, readJson } from '@/lib/server/http'
 import { memoryListQuery, newMemory, userKeyFrom } from '@/lib/server/memory-schemas'
 import { authed } from '@/lib/server/route'
+import { clientIp } from '@/lib/server/client-ip'
 import type { MemoryKind } from '@/lib/memory'
 
 /** Your memories, newest first; with ?q= a search by words and meaning, with ?kind= one kind. */
@@ -14,6 +15,7 @@ export const GET = authed('memory.list', async ({ env, session, request }) => {
     query: parsed.data.q,
     kind: parsed.data.kind as MemoryKind | undefined,
     userKey: userKeyFrom(request),
+    ip: clientIp(request),
   })
   return jsonResponse(list)
 })
@@ -27,7 +29,7 @@ export const POST = authed('memory.create', async ({ env, session, request }) =>
   const body = parsed.data
   const result =
     body.kind === 'note'
-      ? await agent.memoryAddNote(body.text, key)
-      : await agent.memoryAddLink({ url: body.url, title: body.title ?? '' }, key)
+      ? await agent.memoryAddNote(body.text, key, clientIp(request))
+      : await agent.memoryAddLink({ url: body.url, title: body.title ?? '' }, key, clientIp(request))
   return result.ok ? jsonResponse({ memory: result.memory }, { status: 201 }) : errorResponse(result.code)
 })

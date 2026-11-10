@@ -33,6 +33,10 @@ export const GUEST_LIMITS = {
  */
 export const DAILY_IP_LIMITS = {
   chat: 150,
+  /** Research runs: one network can open several accounts by email (up to signInEmails a day). */
+  research: 9,
+  /** Memory's Gemini calls (embeddings, reading PDFs, picking facts) on the demo key. */
+  memoryAiCalls: 400,
   /** Sign-in emails sent to anyone from one IP. */
   signInEmails: 20,
 } as const
