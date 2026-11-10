@@ -155,7 +155,7 @@ function cleanFileName(name: string): string {
   return base.replace(/[\u0000-\u001f\u007f]/g, '').trim().slice(0, MEMORY_LIMITS.titleChars)
 }
 
-/** The memory as a list shows it: a file's text shortened to an excerpt. */
+/** The memory as the page shows it (lists and save results): a file's text as a one-line excerpt. */
 function forList(memory: Memory): Memory {
   if (memory.kind !== 'file') return memory
   // One line of plain words: a Markdown heading reads as a lead-in ("Plan: ..."), no blank lines.
@@ -299,7 +299,7 @@ export class MemoryEngine {
     }
     const memory = updateMemoryRow(this.deps.sql, id, { title: next.title, text: next.text, url: next.url ?? undefined })
     if (!memory) return { ok: false, code: 'memory_not_found' }
-    return { ok: true, memory: await this.storeVector(memory, vector) }
+    return { ok: true, memory: forList(await this.storeVector(memory, vector)) }
   }
 
   /** Deletes a memory with its search entry and its file. Nothing is left behind, or nothing is deleted. */
@@ -393,7 +393,7 @@ export class MemoryEngine {
     const memory = insertMemory(this.deps.sql, input, id)
     const stored = await this.storeVector(memory, vector)
     if (vector) await this.indexPending()
-    return { ok: true, memory: stored }
+    return { ok: true, memory: forList(stored) }
   }
 
   /** Stores a memory's vector and marks it searchable by meaning; without one it stays words-only. */

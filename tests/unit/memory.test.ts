@@ -172,6 +172,8 @@ describe('memory caps', () => {
     expect(await memory.addFile('fake.pdf', bytes('not a pdf'))).toEqual({ ok: false, code: 'memory_file_unreadable' })
     const pdf = await memory.addFile('bills.pdf', bytes('%PDF-1.4 ...'))
     expect(pdf).toMatchObject({ ok: true, memory: { text: 'Quarterly heat bills', file: { type: 'application/pdf' } } })
+    expect(md.ok && md.memory.text).toBe('Plan: Insulate the attic first.')
+    expect(md.ok && memory.get(md.memory.id)?.text).toBe('# Plan\n\nInsulate the attic first.')
     expect(calls.some((c) => c.kind === 'json' && c.text.includes('[application/pdf]'))).toBe(true)
     expect(memory.usage().bytes).toBe(md.ok && pdf.ok ? md.memory.file!.size + pdf.memory.file!.size : -1)
   })
