@@ -19,6 +19,7 @@ export const ERRORS = {
   busy: { status: 409, message: 'Wren is still answering in this chat.' },
   nothing_to_regenerate: { status: 400, message: 'There is no answer to regenerate here.' },
   memory_not_found: { status: 404, message: "That memory doesn't exist, or it was deleted." },
+  message_not_found: { status: 404, message: "That message isn't in this chat anymore." },
   memory_full: { status: 409, message: 'Your memory is full (500 items). Delete something to make room.' },
   memory_files_full: { status: 409, message: 'Your files are using all 25 MB. Delete a file to make room.' },
   memory_file_type: { status: 415, message: 'Memory reads text, Markdown and PDF files.' },

@@ -35,6 +35,35 @@ export interface Memory {
   updatedAt: number
 }
 
+/** A memory Wren gave the model before an answer, shown as a "From your Memory" chip on it. */
+export interface RecalledMemory {
+  id: string
+  kind: MemoryKind
+  /** A short label: the title, or the start of the text. */
+  label: string
+}
+
+/** A fact Wren saved on its own after an answer, shown as "Saved to Memory · Undo" under the message it came from. */
+export interface AutoSave {
+  /** This save's own id (what Undo names), not the memory's. */
+  id: string
+  memoryId: string
+  /** Added a new fact, or updated one Wren saved before. */
+  action: 'added' | 'updated'
+  text: string
+  undone: boolean
+}
+
+/** Memory's marks on one chat message, saved with the chat so a reload shows them. */
+export interface MessageMemory {
+  /** On an answer: what Wren recalled for it. */
+  recalled?: RecalledMemory[]
+  /** On your message: facts Wren saved from it. */
+  saves?: AutoSave[]
+  /** The memory this message was saved as with "Save to Memory". */
+  savedAs?: string
+}
+
 export interface MemoryUsage {
   count: number
   limit: number
@@ -69,6 +98,12 @@ export const MEMORY_LIMITS = {
   factsPerTurn: 3,
   /** The person's own recent messages the extractor reads. */
   extractorMessages: 4,
+  /** Memories Wren recalls for one answer, at most. */
+  recallCount: 4,
+  /** Characters of one recalled memory given to the model (a file's start). */
+  recallChars: 1_200,
+  /** Characters in a recall chip's label. */
+  labelChars: 60,
 } as const
 
 /**

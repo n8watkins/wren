@@ -47,11 +47,10 @@ const EXPLAINERS: Record<ExplainerId, Explainer> = {
     tone: 'c-sg',
     kicker: 'Memory',
     title: 'How Memory finds things',
-    body: 'Notes, links and files (text, Markdown or PDF) you save on the Memory page are turned into vectors with Gemini and stored in Vectorize, so a search finds what you meant, not just the words you typed. You can edit or delete anything at any time.',
-    flow: ['Save', 'Embed', 'Vectorize', 'Search by meaning'],
+    body: 'Notes, links and files (text, Markdown or PDF) you save, messages you save from chat, and lasting facts Wren keeps from what you tell it are turned into vectors with Gemini and stored in Vectorize. Before answering, Wren looks for what matters to your message and shows it as "From your Memory"; every fact it saves on its own shows "Saved to Memory" with an Undo. You can edit or delete anything at any time.',
+    flow: ['Save', 'Embed', 'Vectorize', 'Recall in chat'],
     under: 'items live in your own agent’s database, files in R2 and vectors in a namespace of your own; deleting an item removes all of it.',
     soon: false,
-    later: 'Saving from chat, and answers that quote your memory, arrive in the next update.',
   },
   meter: {
     icon: 'gauge',

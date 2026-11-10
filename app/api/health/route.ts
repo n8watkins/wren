@@ -30,7 +30,9 @@ function memoryCheck(env: CloudflareEnv, demoKey: boolean): Check {
   const vectors = localVectors ? 'local vectors' : 'Vectorize'
   return {
     ok: true,
-    detail: demoKey ? `notes, links and files, searched by meaning (${env.GEMINI_EMBEDDING_MODEL}, ${vectors})` : `notes, links and files; search by meaning needs a Gemini key (${vectors})`,
+    detail: demoKey
+      ? `notes, links, files and facts from chat, searched by meaning and recalled in chat (${env.GEMINI_EMBEDDING_MODEL}, ${vectors})`
+      : `notes, links and files; search by meaning and recall in chat need a Gemini key (${vectors})`,
   }
 }
 

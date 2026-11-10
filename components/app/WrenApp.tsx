@@ -9,6 +9,7 @@ import { GUEST_CHAT_KEY, KEYS, useLocalSetting, useSessionSetting, writeLocal, w
 import { turnstileToken } from '@/lib/client/turnstile'
 import { SIGN_IN_FIXES, errorMessage, isErrorCode } from '@/lib/errors'
 import { DAILY_LIMITS, GUEST_LIMITS, nextUtcMidnight, type UsageSnapshot } from '@/lib/limits'
+import type { RecalledMemory } from '@/lib/memory'
 import type { ExplainerId } from '../explainers'
 import { Icon } from '../Icons'
 import { WrenMark } from '../WrenMark'
@@ -314,7 +315,30 @@ export function WrenApp({ person, github, initialChats, initialUsage, guestSiteK
     setStreaming({ chatId: targetChat, text: '' })
     let text = ''
     let answerId = ''
+    let recalled: RecalledMemory[] = []
     let finished: ChatMessage['status'] | null = null
+    let settled = false
+    // The answer is over at done (or an error, or the stream ending): show it
+    // and free the composer. The stream may stay open a moment longer for
+    // Wren's saves, which land on the person's message.
+    const settle = () => {
+      if (settled) return
+      settled = true
+      // Show the answer unless the person moved to another chat meanwhile. A
+      // new chat's address may not have been committed yet, so the chat this
+      // started in (none, for a new chat) counts as here too.
+      const answeredChat = streamChatRef.current
+      const stillHere = currentChatRef.current === answeredChat || currentChatRef.current === targetChat
+      if (text && answerId && stillHere) {
+        const status = finished ?? 'stopped'
+        const memory = recalled.length ? { recalled } : undefined
+        setMessages((list) => [...list, { id: answerId, role: 'model', content: text, status, createdAt: Date.now(), memory }])
+      }
+      setStreaming(null)
+      streamChatRef.current = null
+      abortRef.current = null
+      refreshUsage()
+    }
     try {
       for await (const event of sendMessage({
         chatId: targetChat ?? undefined,
@@ -335,11 +359,20 @@ export function WrenApp({ person, github, initialChats, initialUsage, guestSiteK
             newChatRef.current = event.chat.id
             window.history.replaceState(null, '', `/chat/${event.chat.id}`)
           }
+        } else if (event.t === 'recall') {
+          recalled = event.memories
+          setStreaming((s) => (s ? { ...s, recalled } : s))
         } else if (event.t === 'delta') {
           text += event.text
           setStreaming((s) => (s ? { ...s, text } : s))
         } else if (event.t === 'done') {
           finished = event.status
+          settle()
+        } else if (event.t === 'memory') {
+          const { messageId, saves } = event
+          setMessages((list) =>
+            list.map((m) => (m.id === messageId ? { ...m, memory: { ...m.memory, saves: [...(m.memory?.saves ?? []), ...saves] } } : m))
+          )
         } else if (event.t === 'error') {
           finished = 'error'
           setError(errorMessage(event.code))
@@ -354,19 +387,7 @@ export function WrenApp({ person, github, initialChats, initialUsage, guestSiteK
         setModal({ kind: 'sign-in', reason: 'Your session ended. Sign in again to keep chatting.' })
       }
     } finally {
-      // Show the answer unless the person moved to another chat meanwhile. A
-      // new chat's address may not have been committed yet, so the chat this
-      // started in (none, for a new chat) counts as here too.
-      const answeredChat = streamChatRef.current
-      const stillHere = currentChatRef.current === answeredChat || currentChatRef.current === targetChat
-      if (text && answerId && stillHere) {
-        const status = finished ?? 'stopped'
-        setMessages((list) => [...list, { id: answerId, role: 'model', content: text, status, createdAt: Date.now() }])
-      }
-      setStreaming(null)
-      streamChatRef.current = null
-      abortRef.current = null
-      refreshUsage()
+      settle()
     }
   }
 
@@ -536,6 +557,7 @@ export function WrenApp({ person, github, initialChats, initialUsage, guestSiteK
               messages={shownMessages}
               streaming={streaming && streaming.chatId === chatId ? streaming : null}
               busy={streaming !== null}
+              memory={person ? { chatId: loadedChatId, userKey } : null}
               onRegenerate={regenerate}
               onExplain={explain}
             />

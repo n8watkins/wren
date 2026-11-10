@@ -15,14 +15,15 @@ import {
   type ChatSummary,
 } from './chats'
 import { answerStream } from './answer-stream'
-import { MemoryEngine, type MemoryList, type MemoryResult, type SavedFact } from './memory'
+import { ChatMemory } from './chat-memory'
+import { MemoryEngine, type MemoryList, type MemoryResult } from './memory'
 import { memoryAi } from './memory-ai'
 import { sqliteStore, vectorizeStore } from './memory-vectors'
 import { chooseKey } from './keys'
 import { createMeterTable, giveBack, tryTake, used } from './meter'
 import type { ErrorCode } from '../lib/errors'
 import { DAILY_IP_LIMITS, DAILY_LIMITS, GUEST_LIMITS, nextUtcMidnight, utcDay, type UsageSnapshot } from '../lib/limits'
-import type { Memory, MemoryKind } from '../lib/memory'
+import type { AutoSave, Memory, MemoryKind } from '../lib/memory'
 import { optionalSetting } from '../lib/secrets'
 import { ResearchRuns } from './research'
 
@@ -78,12 +79,14 @@ export class WrenAgent extends Agent<Cloudflare.Env> {
   getChat(id: string): { chat: ChatSummary; messages: ChatMessage[]; answering: boolean } | null {
     const chat = getChat(this.db, id)
     if (!chat) return null
-    return { chat, messages: listMessages(this.db, id), answering: this.inFlight.has(id) }
+    return { chat, messages: this.chatMemory.withMarks(id, listMessages(this.db, id)), answering: this.inFlight.has(id) }
   }
 
   deleteChat(id: string): boolean {
     this.inFlight.get(id)?.abort()
-    return deleteChat(this.db, id)
+    const deleted = deleteChat(this.db, id)
+    this.chatMemory.prune()
+    return deleted
   }
 
   usage(): UsageSnapshot {
@@ -143,6 +146,7 @@ export class WrenAgent extends Agent<Cloudflare.Env> {
         await refund()
         return { ok: false, code: 'nothing_to_regenerate' }
       }
+      this.chatMemory.prune()
       userMessage = prompt
     } else {
       const text = request.text ?? ''
@@ -156,6 +160,8 @@ export class WrenAgent extends Agent<Cloudflare.Env> {
     this.inFlight.set(chat.id, controller)
 
     const chatId = chat.id
+    const memory = this.chatMemory
+    const from = { userKey: request.userKey, ip: request.ip }
     const stream = answerStream({
       start: { t: 'start', chat, userMessage, messageId: answer.id, keySource, usage: keySource === 'demo' ? this.usage() : null },
       apiKey,
@@ -172,6 +178,18 @@ export class WrenAgent extends Agent<Cloudflare.Env> {
       },
       refund,
       finish: () => this.inFlight.delete(chatId),
+      // Recall: the memories that match the message, for the model and as chips on the answer.
+      prepare: async () => {
+        const { system, recalled } = await memory.recall({ ...from, chatId, answerId: answer.id, text: userMessage.content })
+        return { system, events: recalled.length ? [{ t: 'recall', messageId: answer.id, memories: recalled }] : [] }
+      },
+      // Then lasting facts from the person's message (not again on a regenerate: nothing new was said).
+      after: request.regenerate
+        ? undefined
+        : async () => {
+            const saves = await this.rememberFromChat(chatId, userMessage.id, from)
+            return saves.length ? [{ t: 'memory', messageId: userMessage.id, saves }] : []
+          },
     })
     return { ok: true, stream }
   }
@@ -294,9 +312,17 @@ export class WrenAgent extends Agent<Cloudflare.Env> {
     }
   }
 
-  // ---- Memory (agent/memory.ts): the person's library. Chat doesn't call it yet. ----
+  // ---- Memory (agent/memory.ts): the person's library; in chat through agent/chat-memory.ts. ----
 
-  /** This person's memory engine, with the request's Gemini key (never stored). */
+  private chatMemoryInstance?: ChatMemory
+
+  /** Memory in chat: recall, Wren's saves and Undo, "Save to Memory". Holds no key: each call brings its own. */
+  private get chatMemory(): ChatMemory {
+    this.chatMemoryInstance ??= new ChatMemory(this.db, (userKey, ip) => this.memory(userKey, ip))
+    return this.chatMemoryInstance
+  }
+
+  /** This person's memory engine, with the request's Gemini key (never stored) and client IP (for the per-network count). */
   private memory(userKey?: string, ip?: string): MemoryEngine {
     const sql = this.db
     // The agent's id names the person's Vectorize namespace and R2 prefix.
@@ -354,13 +380,33 @@ export class WrenAgent extends Agent<Cloudflare.Env> {
   }
 
   /**
-   * Saves lasting facts from a chat, read from the person's own messages in it
-   * (never Wren's answers). For the chat wiring that comes next.
+   * Saves lasting facts from a chat after an answer, read from the person's
+   * own messages in it (never Wren's answers), and keeps them with the message
+   * they came from for "Saved to Memory · Undo". The request's key and IP go
+   * with every Gemini call it makes.
    */
-  rememberFromChat(chatId: string, userKey?: string): Promise<SavedFact[]> {
+  private rememberFromChat(chatId: string, messageId: string, from: { userKey?: string; ip: string }): Promise<AutoSave[]> {
     const own = listMessages(this.db, chatId)
       .filter((message) => message.role === 'user')
       .map((message) => ({ id: message.id, text: message.content }))
-    return this.memory(userKey).rememberFacts(own, { chatId })
+    return this.chatMemory.remember({ ...from, chatId, messageId, own })
+  }
+
+  /** "Save to Memory" on one of the chat's messages (yours or Wren's). */
+  async memorySaveMessage(
+    chatId: string,
+    messageId: string,
+    userKey: string | undefined,
+    ip: string
+  ): Promise<MemoryResult<{ memory: Memory }>> {
+    if (!getChat(this.db, chatId)) return { ok: false, code: 'chat_not_found' }
+    const message = listMessages(this.db, chatId).find((m) => m.id === messageId)
+    if (!message || !message.content.trim()) return { ok: false, code: 'message_not_found' }
+    return this.chatMemory.saveMessage({ chatId, message, userKey, ip })
+  }
+
+  /** Undo one of Wren's saves in a chat. */
+  memoryUndoSave(chatId: string, saveId: string, userKey: string | undefined, ip: string): Promise<MemoryResult<{ save: AutoSave }>> {
+    return this.chatMemory.undo({ chatId, saveId, userKey, ip })
   }
 }

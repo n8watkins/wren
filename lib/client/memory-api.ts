@@ -1,4 +1,4 @@
-import type { Memory, MemoryKind, MemoryUsage } from '@/lib/memory'
+import type { AutoSave, Memory, MemoryKind, MemoryUsage } from '@/lib/memory'
 import type { ErrorCode } from '@/lib/errors'
 import { request } from './api'
 
@@ -49,4 +49,21 @@ export const memoryApi = {
     }).then((r) => r.memory),
   remove: (id: string) => request<{ deleted: boolean }>(`/api/memory/${encodeURIComponent(id)}`, { method: 'DELETE' }),
   fileUrl: (id: string) => `/api/memory/${encodeURIComponent(id)}/file`,
+  /** "Save to Memory" on a chat message; saving it again returns the same memory. */
+  saveMessage: (chatId: string, messageId: string, userKey: string | null) =>
+    request<{ memory: Memory }>(`/api/chats/${encodeURIComponent(chatId)}/messages/${encodeURIComponent(messageId)}/save`, {
+      method: 'POST',
+      headers: headers(userKey),
+    }).then((r) => r.memory),
+  /** Undo a fact Wren saved on its own. */
+  undoSave: (chatId: string, saveId: string, userKey: string | null) =>
+    request<{ save: AutoSave }>(`/api/chats/${encodeURIComponent(chatId)}/saves/${encodeURIComponent(saveId)}/undo`, {
+      method: 'POST',
+      headers: headers(userKey),
+    }).then((r) => r.save),
+}
+
+/** Where a memory is on the Memory page (the page scrolls to it and marks it). */
+export function memoryHref(id: string): string {
+  return `/memory#m-${id}`
 }

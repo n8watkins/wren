@@ -796,8 +796,215 @@ svg.wren.talking .head {
   color: var(--saffron);
   border-color: var(--line);
 }
-.acts button.mem {
+.acts .mem {
   color: var(--sage);
+}
+/* "Saved to memory": a link to the memory, in the action row's button shape. */
+.acts a.mem {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  padding: 4px 8px;
+  border-radius: 7px;
+  text-decoration: none;
+}
+.acts a.mem svg {
+  width: 14px;
+  height: 14px;
+}
+.acts a.mem:hover {
+  background: var(--sage-soft);
+}
+.acts button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+.memerr {
+  align-self: center;
+  font-size: 12px;
+  color: var(--danger);
+}
+
+/* Your message, with "Save to memory" beside it and Wren's saves under it. */
+.uturn {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+  min-width: 0;
+}
+.urow {
+  display: flex;
+  align-items: flex-end;
+  justify-content: flex-end;
+  gap: 6px;
+  width: 100%;
+}
+.urow .u {
+  min-width: 0;
+}
+.umem {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  margin-bottom: 4px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  background: none;
+  color: var(--text-3);
+  opacity: 0;
+  transition: opacity 0.12s;
+}
+.umem svg {
+  width: 15px;
+  height: 15px;
+}
+.uturn:hover .umem,
+.umem:focus-visible,
+.umem.on {
+  opacity: 1;
+}
+.umem:hover {
+  background: var(--sage-soft);
+  color: var(--sage);
+}
+.umem.on {
+  color: var(--sage);
+}
+.umem:disabled {
+  opacity: 0.6;
+}
+@media (hover: none) {
+  .umem {
+    opacity: 0.7;
+  }
+}
+.uturn .memerr {
+  max-width: 78%;
+  text-align: right;
+}
+
+/* "Saved to Memory · Undo": one line per fact Wren saved from your message. */
+.saved-lines {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+  max-width: 100%;
+}
+.saved {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  padding: 3px 4px 3px 10px;
+  border-radius: 999px;
+  background: var(--sage-soft);
+  color: var(--sage);
+  font-size: 12px;
+  line-height: 1.3;
+}
+.saved > svg {
+  flex: none;
+  width: 13px;
+  height: 13px;
+}
+.saved .st {
+  flex: none;
+  font-weight: 600;
+}
+.saved .fact {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-2);
+  text-decoration: none;
+}
+.saved .fact::before {
+  content: '·';
+  margin-right: 6px;
+  color: var(--sage);
+}
+.saved a.fact:hover {
+  color: var(--text);
+  text-decoration: underline;
+}
+.saved button {
+  flex: none;
+  border: none;
+  background: none;
+  padding: 2px 8px;
+  border-radius: 999px;
+  color: var(--sage);
+  font: inherit;
+  font-weight: 600;
+}
+.saved button:hover {
+  background: color-mix(in srgb, var(--sage) 14%, transparent);
+}
+.saved.off {
+  background: none;
+  color: var(--text-3);
+  padding-right: 10px;
+}
+.saved.off .st,
+.saved.off .fact::before {
+  color: var(--text-3);
+}
+.saved.off .fact {
+  text-decoration: line-through;
+  color: var(--text-3);
+}
+.saved .err {
+  flex: none;
+  color: var(--danger);
+}
+
+/* "From your Memory": the memories Wren used for an answer. */
+.recall {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+.recall .lbl {
+  font: 500 10.5px/1 var(--f-mono);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--sage);
+  margin-right: 2px;
+}
+.rchip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  max-width: 260px;
+  padding: 3px 9px 3px 7px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--sage) 30%, transparent);
+  background: var(--sage-soft);
+  color: var(--sage);
+  font-size: 12px;
+  line-height: 1.35;
+  text-decoration: none;
+}
+.rchip svg {
+  flex: none;
+  width: 13px;
+  height: 13px;
+}
+.rchip span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.rchip:hover {
+  border-color: var(--sage);
 }
 
 /* model text */

@@ -1,6 +1,7 @@
 import type { ChatMessage, ChatSummary } from '../agent/chats'
 import type { ErrorCode } from './errors'
 import type { UsageSnapshot } from './limits'
+import type { AutoSave, RecalledMemory } from './memory'
 
 /**
  * The chat stream (POST /api/chat): one JSON object per line.
@@ -16,9 +17,11 @@ export type ChatStreamEvent =
       keySource: 'demo' | 'user'
       usage: UsageSnapshot | null
     }
+  | { t: 'recall'; messageId: string; memories: RecalledMemory[] }
   | { t: 'delta'; text: string }
   | { t: 'done'; status: 'done' | 'stopped' }
   | { t: 'error'; code: ErrorCode }
+  | { t: 'memory'; messageId: string; saves: AutoSave[] }
 
 /** Splits a byte stream of NDJSON into events; skips anything malformed. */
 export async function* readChatStream(body: ReadableStream<Uint8Array>): AsyncGenerator<ChatStreamEvent> {
