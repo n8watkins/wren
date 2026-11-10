@@ -40,6 +40,12 @@
       "migrations_dir": "migrations"
     }
   ],
+  // Memory (agent/memory.ts): what each person saves lives in their own
+  // agent's SQLite database; its search vectors live here, one namespace per
+  // agent, and saved files in R2 under the agent's id. Local and test runs
+  // keep vectors in the agent's SQLite instead (MEMORY_VECTORS=local).
+  "vectorize": [{ "binding": "MEMORY_INDEX", "index_name": "wren-memory" }],
+  "r2_buckets": [{ "binding": "MEMORY_FILES", "bucket_name": "wren-memory" }],
   // Sign-in links (lib/server/email.ts) go through Cloudflare Email Service
   // from an address on n8builds.dev, which is onboarded for sending.
   "send_email": [{ "name": "EMAIL" }],
@@ -50,6 +56,8 @@
     // Chat model, and the one tried when it fails or stays silent (agent/gemini.ts).
     "GEMINI_MODEL": "gemini-3.5-flash-lite",
     "GEMINI_FALLBACK_MODEL": "gemini-3.1-flash-lite",
+    // Memory's embeddings (agent/memory-ai.ts), 768 dimensions like the index.
+    "GEMINI_EMBEDDING_MODEL": "gemini-embedding-2",
     "EMAIL_FROM": "wren@n8builds.dev",
     // "cloudflare" sends real email; "outbox" (local and test runs only) keeps
     // sign-in links in D1 for scripts/magic-link.mjs. /api/health fails if a

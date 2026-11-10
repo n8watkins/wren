@@ -24,7 +24,7 @@ async function failure(response: Response): Promise<ApiError> {
   return new ApiError('internal', errorMessage('internal'))
 }
 
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
+export async function request<T>(path: string, init?: RequestInit): Promise<T> {
   let response: Response
   try {
     response = await fetch(path, { credentials: 'same-origin', ...init })

@@ -7,8 +7,13 @@
 //   "mock:fail"         a 500 before any text
 //   anything about a heat pump: a realistic Markdown answer (for screenshots)
 // and on the key: one starting "bad-" gets Gemini's invalid-key answer.
+// Memory's calls: batchEmbedContents answers with tests/mocks/embedding.mjs,
+// and generateContent (JSON) reads a PDF (the text in its "(...) Tj" strings)
+// or picks facts: each sentence of the person's messages that says "I" or
+// "my" (at most 3); "mock:fail" anywhere fails.
 // It also stands in for Turnstile's siteverify (POST /siteverify).
 import { createServer } from 'node:http'
+import { mockEmbedding } from './embedding.mjs'
 
 const port = Number(process.env.MOCK_GEMINI_PORT ?? 3127)
 const host = process.env.E2E_HOST ?? '127.0.0.2'
@@ -34,6 +39,45 @@ const SAMPLE = [
   '| 3 tons | ~36,000 BTU/h | tight, well-insulated homes |',
   '| 3.5 tons | ~42,000 BTU/h | your house, with margin |',
 ].join('\n')
+
+function json(res, status, body) {
+  res.writeHead(status, { 'Content-Type': 'application/json' })
+  res.end(JSON.stringify(body))
+}
+
+function pdfText(base64) {
+  const raw = Buffer.from(base64, 'base64').toString('latin1')
+  return [...raw.matchAll(/\(([^)]*)\)\s*Tj/g)].map((m) => m[1]).join('\n')
+}
+
+function pickFacts(text) {
+  const own = text.replace(/^Message \d+:$/gm, '')
+  return own
+    .split(/(?<=[.!?])\s+|\n+/)
+    .map((s) => s.trim())
+    .filter((s) => /\b(i|i'm|my)\b/i.test(s))
+    .slice(0, 3)
+}
+
+/** Memory's non-streaming calls: embeddings, and JSON answers for reading PDFs and picking facts. */
+function memoryCall(req, res, body) {
+  if (/:batchEmbedContents/.test(req.url ?? '')) {
+    const embeddings = (body.requests ?? []).map((r) => {
+      const text = (r.content?.parts ?? []).map((p) => p.text ?? '').join(' ')
+      return { values: mockEmbedding(text, r.outputDimensionality ?? 768) }
+    })
+    if (embeddings.some((_, i) => /mock:fail/.test(JSON.stringify(body.requests[i])))) {
+      return json(res, 500, { error: { code: 500, message: 'internal', status: 'INTERNAL' } })
+    }
+    return json(res, 200, { embeddings })
+  }
+  const parts = (body.contents ?? []).flatMap((c) => c.parts ?? [])
+  const text = parts.map((p) => p.text ?? '').join('\n')
+  if (/mock:fail/.test(text)) return json(res, 500, { error: { code: 500, message: 'internal', status: 'INTERNAL' } })
+  const pdf = parts.find((p) => p.inlineData?.mimeType === 'application/pdf')
+  const answer = pdf ? { text: pdfText(pdf.inlineData.data) } : { facts: pickFacts(text) }
+  return json(res, 200, { candidates: [{ content: { role: 'model', parts: [{ text: JSON.stringify(answer) }] }, index: 0 }] })
+}
 
 function sse(res, chunks, delay) {
   res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache' })
@@ -62,7 +106,7 @@ createServer((req, res) => {
       res.end(JSON.stringify({ success, 'error-codes': success ? [] : ['invalid-input-response'] }))
       return
     }
-    if (!/:streamGenerateContent/.test(req.url ?? '')) {
+    if (!/:(streamGenerateContent|generateContent|batchEmbedContents)/.test(req.url ?? '')) {
       res.writeHead(404).end()
       return
     }
@@ -76,6 +120,7 @@ createServer((req, res) => {
     try {
       body = JSON.parse(raw)
     } catch {}
+    if (!/:streamGenerateContent/.test(req.url ?? '')) return memoryCall(req, res, body)
     const turns = body.contents ?? []
     const last = turns.filter((t) => t.role === 'user').at(-1)?.parts?.[0]?.text ?? ''
     if (last.startsWith('mock:fail')) {
