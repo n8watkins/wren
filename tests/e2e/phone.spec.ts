@@ -19,6 +19,8 @@ const PHONES = [
 
 /** Visible controls smaller than 44 px (WCAG 2.5.5), described for the failure message. */
 async function smallTargets(page: Page, within: Locator = page.locator('body')): Promise<string[]> {
+  // A dialog still opening is scaled a little; measure it once it has settled.
+  await within.evaluate((root) => Promise.all(root.getAnimations({ subtree: true }).map((a) => a.finished.catch(() => undefined))))
   return within.evaluate((root) => {
     const small: string[] = []
     for (const el of root.querySelectorAll<HTMLElement>('a[href], button, input, textarea, [role=button]')) {
@@ -29,7 +31,8 @@ async function smallTargets(page: Page, within: Locator = page.locator('body')):
       // in a paragraph too; so is the header's
       // ring and "?", whose hit areas are larger than they look (::after).
       if (getComputedStyle(el).display === 'inline' || el.matches('p .linkbtn, .mib, .ring2')) continue
-      if (box.width < 44 || box.height < 44) {
+      // Half a pixel of tolerance: layout rounds a 44 px control to 43.6 on some screens.
+      if (box.width < 43.5 || box.height < 43.5) {
         const name = (el.getAttribute('aria-label') || el.textContent || el.tagName).trim().slice(0, 40)
         small.push(`${name} (${Math.round(box.width)}x${Math.round(box.height)})`)
       }
