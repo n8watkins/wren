@@ -12,11 +12,61 @@ import { composer, isPhone, noHorizontalScroll, sendMessage, signIn, skipIntro }
 const notice = (page: import('@playwright/test').Page) =>
   page.locator(isPhone(page) ? '.mcomp' : '.composer').getByTestId('demo-notice')
 
+/** On a phone the notice starts as one line; "More" opens the rest. A no-op on desktop, where it is all showing. */
+async function openNotice(page: import('@playwright/test').Page) {
+  if (!isPhone(page)) return
+  const more = notice(page).getByTestId('demo-more')
+  if ((await more.getAttribute('aria-expanded')) !== 'true') await more.click()
+  await expect(notice(page).getByTestId('demo-full')).toBeVisible()
+}
+
 test.describe('from anywhere else', () => {
+  test('phone: one line with More, then the rest inline; desktop shows it all', async ({ page }) => {
+    await skipIntro(page)
+    await page.goto('/')
+    const box = notice(page)
+    await expect(box).toBeVisible()
+    if (!isPhone(page)) {
+      await expect(box.getByTestId('demo-more')).toBeHidden()
+      await expect(box.getByTestId('demo-full')).toBeVisible()
+      return
+    }
+    const more = box.getByTestId('demo-more')
+    const short = box.getByTestId('demo-short')
+    await expect(short).toHaveText("Free demo. Don't share private info.")
+    await expect(more).toHaveAttribute('aria-expanded', 'false')
+    await expect(box.getByTestId('demo-full')).toBeHidden()
+    // One line (no wrap, not cut off), and the tap targets are 44px.
+    expect(await short.evaluate((el) => el.scrollWidth <= el.clientWidth && el.getBoundingClientRect().height < 24)).toBe(true)
+    for (const id of ['demo-more', 'demo-dismiss']) {
+      const r = (await box.getByTestId(id).boundingBox())!
+      expect(r.width).toBeGreaterThanOrEqual(43.5)
+      expect(r.height).toBeGreaterThanOrEqual(43.5)
+    }
+    const collapsed = (await box.boundingBox())!.height
+    expect(collapsed).toBeLessThan(60)
+    await noHorizontalScroll(page)
+
+    // Keyboard: Enter opens it inline, and the rest is there.
+    await more.focus()
+    await page.keyboard.press('Enter')
+    await expect(more).toHaveAttribute('aria-expanded', 'true')
+    await expect(more).toHaveText('Less')
+    await expect(box.getByTestId('demo-full')).toContainText("Please don't share personal details")
+    await expect(box.getByTestId('demo-own-key')).toBeVisible()
+    await expect(box.getByTestId('demo-dismiss')).toBeVisible()
+    await noHorizontalScroll(page)
+
+    await more.click()
+    await expect(more).toHaveAttribute('aria-expanded', 'false')
+    await expect(box.getByTestId('demo-full')).toBeHidden()
+  })
+
   test('shows the free-demo notice, opens the own-key how-to, and stays dismissed', async ({ page }) => {
     await skipIntro(page)
     await page.goto('/')
     await expect(notice(page)).toBeVisible()
+    await openNotice(page)
     await expect(notice(page)).toContainText("This is a free demo running on Google Gemini's free tier.")
     await expect(notice(page)).toContainText("Please don't share personal details")
     await expect(notice(page).getByTestId('demo-nudge')).toHaveCount(0)
@@ -66,6 +116,7 @@ test.describe('from the UK', () => {
     await expect(notice(page).getByTestId('demo-nudge')).toHaveText(
       "You're visiting from the United Kingdom. Google's terms reserve Gemini's free tier from apps used in the UK, the EU/EEA and Switzerland, so please use Wren with your own Gemini key there."
     )
+    await openNotice(page)
     await expect(notice(page)).toContainText("Please don't share personal details")
     await noHorizontalScroll(page)
 
