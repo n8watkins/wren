@@ -63,6 +63,7 @@ function env(overrides: Record<string, string | undefined> = {}): CloudflareEnv 
     GEMINI_BASE_URL: baseUrl,
     TAVILY_API_KEY: 'tavily-key',
     TAVILY_BASE_URL: baseUrl,
+    DAILY_COUNTER: { getByName: () => ({ recordMonthly: async () => {}, giveBackMonthly: async () => {} }) },
     ...overrides,
   } as unknown as CloudflareEnv
 }

@@ -1,5 +1,7 @@
 import { RESEARCH_LIMITS } from '../lib/limits'
+import { TAVILY_LIMITS } from '../lib/limits'
 import { log } from '../lib/log'
+import type { TavilyBudget } from './tavily-budget'
 
 /**
  * Web search for research runs: Tavily, which returns each page's text with
@@ -112,12 +114,20 @@ export async function searchWeb(
     tavilyBaseUrl?: string
     signal?: AbortSignal
     fetchImpl?: typeof fetch
+    /** Counts the search's credit against the month's cap; without it nothing is counted. */
+    budget?: TavilyBudget
   }
 ): Promise<SearchResult[]> {
   const started = Date.now()
   if (!options.tavilyKey) {
     log.warn('research.search_failed', { provider: 'tavily', code: 'no_key' })
     throw new SearchError('no_key')
+  }
+  const credits = TAVILY_LIMITS.searchCredits
+  if (options.budget && !(await options.budget.reserve(credits))) {
+    // The month's share is used: the same as Tavily saying it is out of credits.
+    log.warn('research.search_failed', { provider: 'tavily', code: 'monthly_cap' })
+    throw new SearchError('out_of_credits')
   }
   try {
     const results = await tavilySearch(query, {
@@ -129,7 +139,9 @@ export async function searchWeb(
     log.info('research.search', { provider: 'tavily', count: results.length, ms: Date.now() - started })
     return results
   } catch (error) {
+    // An aborted call may have been charged, so it stays counted; any other failure was not.
     if (options.signal?.aborted) throw error
+    await options.budget?.release(credits).catch(() => undefined)
     const reason = failureOf(error)
     log.warn('research.search_failed', {
       provider: 'tavily',

@@ -25,6 +25,16 @@ Read this before changing product, design or workflow, and add every new decisio
   Either way the run doesn't count against the person's daily runs, like every run that ends without a report.
   Without `TAVILY_API_KEY` research is off: starting a run answers `research_unavailable` and `/api/health` reports research as not ok.
   Wren has its own key (`TAVILY_API_KEY`), never one shared with another project.
+- **Tavily is capped at 750 credits a month** (owner, 2026-11-10).
+  Wren and PortfolioRank share one free Tavily account: 1,000 credits a month and 100 requests a minute across both keys.
+  Wren may use 750 (`TAVILY_MONTHLY_CREDITS` in `wrangler.jsonc`), PortfolioRank 200, which leaves 50 spare.
+  Credits are counted by Tavily's pricing: a basic search is 1 credit (what research and the daily check run; page text comes with it), an advanced search would be 2, and Wren calls no extract endpoint.
+  Tavily's own docs say only "1,000 free API credits every month"; secondary sources say the reset is the 1st of the calendar month, so the counter uses the UTC calendar month and the cap leaves a 50 credit margin for any difference.
+  Each search reserves its credit before the call in one Durable Object instance (`DailyCounter` named `tavily-credits`, `agent/tavily-budget.ts`), which handles one request at a time, so two searches can't both take the last credit.
+  The credit is given back when Tavily answers with an error or can't be reached (it charges only for answered searches) and kept when the run is cancelled mid-call.
+  At the cap the search fails as `out_of_credits` without calling Tavily, so the run stops as "Tavily, the web search research uses, is out of credits right now." and doesn't count against the person's daily runs.
+  The daily model check counts its one credit but is never held back by the cap.
+  `/api/health` shows the month's use as `tavilyCredits` (`month`, `used`, `cap`) and in the research check's detail; reaching the cap does not make health degraded.
 - **Free tier everywhere, with a demo notice and a push for your own key** (owner, 2026-11-10).
   Wren's demo key stays on Gemini's free tier, and Wren works the same in every country: no region is blocked.
   Google's terms (https://ai.google.dev/gemini-api/terms) reserve the free tier from apps used in the European Economic Area, Switzerland and the UK, and ask free-tier users not to send personal information; the owner accepts this risk for the demo.

@@ -45,6 +45,7 @@ config.vars = {
   MEMORY_VECTORS: 'local',
   // Research searches go to the Tavily mock (tests/mocks/tavily.mjs).
   TAVILY_API_KEY: 'test-tavily-key',
+  TAVILY_MONTHLY_CREDITS: '750',
   TAVILY_BASE_URL: `http://${host}:${tavilyPort}`,
   BETTER_AUTH_SECRET: 'e2e-only-secret-not-used-anywhere-else-0123456789',
   // Cloudflare's always-pass Turnstile test keys; siteverify is the mock.

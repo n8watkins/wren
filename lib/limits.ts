@@ -161,3 +161,21 @@ export function nextUtcMidnight(now: Date = new Date()): string {
   const next = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1))
   return next.toISOString()
 }
+
+/** The UTC month a moment falls on, as YYYY-MM: the bucket of the monthly Tavily credit counter. */
+export function utcMonth(now: Date = new Date()): string {
+  return now.toISOString().slice(0, 7)
+}
+
+/**
+ * Tavily credits (owner decision 2026-11-10). Wren and PortfolioRank share one
+ * free Tavily account: 1,000 credits a month (reset on the 1st, UTC) and 100
+ * requests a minute. Wren may use 750 and PortfolioRank 200, which leaves 50 spare.
+ * The cap is the TAVILY_MONTHLY_CREDITS variable in wrangler.jsonc; this is
+ * the default when it is missing or not a whole number.
+ */
+export const TAVILY_LIMITS = {
+  monthlyCredits: 750,
+  /** One basic search (what Wren runs): 1 credit, page text included. Advanced would be 2. */
+  searchCredits: 1,
+} as const

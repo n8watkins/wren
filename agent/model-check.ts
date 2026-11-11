@@ -1,5 +1,7 @@
 import { GeminiError, connectLive, embedText, generateText, type LiveEvents } from './gemini'
 import type { Sql } from './sql'
+import { TAVILY_LIMITS } from '../lib/limits'
+import { tavilyBudget } from './tavily-budget'
 import { TavilyError, tavilySearch } from './web-search'
 import { EMBEDDING_DIMENSIONS } from '../lib/memory'
 import { log } from '../lib/log'
@@ -110,12 +112,18 @@ export function probesFor(env: CloudflareEnv): Probe[] {
       target: 'tavily',
       skip: tavilyKey ? undefined : 'no_tavily_key',
       run: async (signal) => {
+        // The probe is one basic search, 1 credit: counted against the month, never held back by the cap.
+        const budget = tavilyBudget(env)
+        await budget.record(TAVILY_LIMITS.searchCredits)
         const results = await tavilySearch('Cloudflare Workers', {
           apiKey: tavilyKey ?? '',
           baseUrl: optionalSetting(env, 'TAVILY_BASE_URL'),
           signal,
           maxResults: 1,
           pageText: false,
+        }).catch(async (error: unknown) => {
+          if (!signal.aborted) await budget.release(TAVILY_LIMITS.searchCredits).catch(() => undefined)
+          throw error
         })
         if (!results.length) throw new ProbeFailure('no_results')
       },
