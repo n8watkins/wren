@@ -24,7 +24,15 @@ Set with `npx wrangler secret put NAME` (never on the command line):
 
 The GitHub OAuth app's callback URL is `<PUBLIC_URL>/api/auth/callback/github`.
 
-## Deploy
+## Automatic deploy
+
+`.github/workflows/deploy.yml` deploys main after CI passes on it (a push to main, never a pull request or a fork): it applies the D1 migrations, runs `npm run deploy`, then reads `https://wren.n8builds.dev/api/health` and fails unless `status` is `ok`.
+Only one deploy runs at a time, and the job runs only in `n8watkins/wren`.
+It needs the `CLOUDFLARE_API_TOKEN` repository secret (the owner's shared deploy token, `shared/CLOUDFLARE_DEPLOY_TOKEN` in pass) and the `CLOUDFLARE_ACCOUNT_ID` repository variable; if either is missing the run fails with an error annotation rather than skipping.
+Run it again from the Actions tab with "Run workflow" (`workflow_dispatch`).
+Worker secrets are not touched by it; they stay as set with `wrangler secret put`.
+
+## Deploy by hand
 
 ```bash
 npm run db:migrate   # D1 migrations, remote
