@@ -19,8 +19,8 @@ const PHONES = [
 
 /** Visible controls smaller than 44 px (WCAG 2.5.5), described for the failure message. */
 async function smallTargets(page: Page, within: Locator = page.locator('body')): Promise<string[]> {
-  // A dialog still opening is scaled a little; measure it once it has settled.
-  await within.evaluate((root) => Promise.all(root.getAnimations({ subtree: true }).map((a) => a.finished.catch(() => undefined))))
+  // A dialog still opening is scaled a little; measure it once it has settled (endless animations, a spinner, are not waited for).
+  await within.evaluate((root) => Promise.all(root.getAnimations({ subtree: true }).filter((a) => a.effect?.getComputedTiming().iterations !== Infinity).map((a) => a.finished.catch(() => undefined))))
   return within.evaluate((root) => {
     const small: string[] = []
     for (const el of root.querySelectorAll<HTMLElement>('a[href], button, input, textarea, [role=button]')) {
