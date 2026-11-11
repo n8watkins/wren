@@ -82,7 +82,11 @@
     // Guest chat's human check (Turnstile, public site key) and the site-wide
     // cap on guest messages a day (lib/limits.ts GUEST_LIMITS).
     "TURNSTILE_SITE_KEY": "0x4AAAAAAF6JpSY2Xh6ynpPk",
-    "GUEST_SITE_DAILY_CAP": "500"
+    "GUEST_SITE_DAILY_CAP": "500",
+    // Tavily credits Wren may use a month (agent/tavily-budget.ts). Wren and
+    // PortfolioRank share one free account of 1,000 a month: 750 here, 200
+    // there, 50 spare. At the cap research stops as if Tavily were out of credits.
+    "TAVILY_MONTHLY_CREDITS": "750"
   },
   // Secrets (wrangler secret put, docs/DEPLOY.md). BETTER_AUTH_SECRET is
   // required; GEMINI_API_KEY, GITHUB_CLIENT_ID and GITHUB_CLIENT_SECRET are

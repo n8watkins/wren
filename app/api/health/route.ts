@@ -4,6 +4,7 @@ import { optionalSetting } from '@/lib/secrets'
 import { jsonResponse } from '@/lib/server/http'
 import { guestChatConfigured } from '@/lib/server/turnstile'
 import { DAILY_LIMITS } from '@/lib/limits'
+import { tavilyUsage } from '@/lib/tavily-credits'
 import { MODEL_CHECK_INSTANCE, modelsHealth } from '@/lib/model-check'
 
 /**
@@ -57,10 +58,11 @@ export async function GET(): Promise<Response> {
   const env = getEnv()
   const production = isProduction(env) && new URL(env.PUBLIC_URL).protocol === 'https:'
 
-  const [database, agents, modelCheck] = await Promise.all([
+  const [database, agents, modelCheck, tavilyCredits] = await Promise.all([
     timed(() => env.DB.prepare('SELECT 1 AS ok').first<{ ok: number }>()),
     timed(() => env.DAILY_COUNTER.getByName('health').ping()),
     timed(() => env.MODEL_CHECK.getByName(MODEL_CHECK_INSTANCE).state()),
+    timed(() => tavilyUsage(env)),
   ])
   const testHooks =
     env.EMAIL_TRANSPORT === 'outbox' ||
@@ -93,7 +95,11 @@ export async function GET(): Promise<Response> {
     voice: voiceCheck(env, demoKey),
     research: {
       ok: demoKey && tavily,
-      detail: !demoKey ? 'needs the demo key' : tavily ? 'searches with Tavily' : 'no Tavily key yet: research is off',
+      detail: !demoKey
+        ? 'needs the demo key'
+        : tavily
+          ? `searches with Tavily${tavilyCredits.value ? `, ${tavilyCredits.value.used} of ${tavilyCredits.value.cap} credits used this month` : ''}`
+          : 'no Tavily key yet: research is off',
     },
     memory: memoryCheck(env, demoKey),
     models: modelCheck.value
@@ -107,5 +113,6 @@ export async function GET(): Promise<Response> {
   // Each dependency's last real call: ok, how long it took, and a short error code.
   const lastRun = modelCheck.value?.lastRun
   const models = lastRun ? { ranAt: new Date(lastRun.ranAt).toISOString(), results: lastRun.results } : null
-  return jsonResponse({ status, checks, models }, { status: core ? 200 : 503 })
+  // Hitting the Tavily cap is research stopping as designed, so it never changes `status`.
+  return jsonResponse({ status, checks, models, tavilyCredits: tavilyCredits.value ?? null }, { status: core ? 200 : 503 })
 }

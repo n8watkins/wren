@@ -41,6 +41,7 @@ import { DAILY_LIMITS, RESEARCH_LIMITS, utcDay } from '../lib/limits'
 import { log } from '../lib/log'
 import { RUN_FAILURES, isActive, type RunDetail, type RunFailure, type RunStreamEvent, type RunSummary } from '../lib/research'
 import { optionalSetting } from '../lib/secrets'
+import { tavilyBudget } from './tavily-budget'
 import { SKIP_REASONS, checkUrl, fetchPage, type PageResult } from '../lib/web/fetch-page'
 import { tidy } from '../lib/web/page-text'
 
@@ -450,6 +451,7 @@ export class ResearchRuns {
           tavilyKey: optionalSetting(env, 'TAVILY_API_KEY'),
           tavilyBaseUrl: optionalSetting(env, 'TAVILY_BASE_URL'),
           signal,
+          budget: tavilyBudget(env),
         }),
       fetchPage: (url) => fetchPage(url, { signal }),
     }

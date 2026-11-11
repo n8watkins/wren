@@ -80,6 +80,22 @@ test('hostile page text cannot steer the run, add a source or add a link', async
   await me.dispose()
 })
 
+test('each search counts a Tavily credit, and health shows the month against the cap without degrading', async ({ playwright, baseURL }) => {
+  const me = await person(playwright, baseURL!)
+  const credits = async () => (await (await me.get('/api/health')).json()).tavilyCredits as { month: string; used: number; cap: number }
+  const before = await credits()
+  expect(before.cap).toBe(750)
+  expect(before.month).toMatch(/^\d{4}-\d{2}$/)
+  const { final } = await research(me, 'What should I look for in an e-bike under $1,500?')
+  expect(final.status).toBe('done')
+  // Other tests run beside this one, so at least its three searches.
+  expect((await credits()).used).toBeGreaterThanOrEqual(before.used + 3)
+  const health = await (await me.get('/api/health')).json()
+  expect(health.checks.research.detail).toMatch(/credits used this month$/)
+  expect(health.status).not.toBe('down')
+  await me.dispose()
+})
+
 test('when Tavily is out of credits the run stops at once, says so, and is given back', async ({ playwright, baseURL }) => {
   const me = await person(playwright, baseURL!)
   const { final } = await research(me, 'mock:tavily-down e-bikes')
