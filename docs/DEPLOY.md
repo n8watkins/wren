@@ -42,7 +42,7 @@ curl -s https://wren.n8builds.dev/api/health
 
 `PUBLIC_URL` in `wrangler.jsonc` must be the address people use (`https://wren.n8builds.dev`): sign-in callbacks, trusted origins and email links are built from it.
 `wren.n8builds.dev` is a Workers custom domain (`routes` in `wrangler.jsonc`); `wrangler deploy` creates its DNS record and certificate.
-The `workers.dev` address forwards to it.
+The `workers.dev` address and preview URLs are off (`workers_dev` and `preview_urls` in `wrangler.jsonc`).
 
 ## The daily model check
 
@@ -60,7 +60,7 @@ It serves the Worker on 127.0.0.1:3123 with its own local state (`scripts/model-
 
 The first deploy needs the required secret up front, because a Worker that doesn't exist yet can't take `wrangler secret put`: write `BETTER_AUTH_SECRET=<random>` to a file outside the repo, run `npx wrangler deploy --secrets-file <file>` after `npm run build:worker`, then delete the file.
 
-If the `workers.dev` address answers `error code: 1042` after a deploy (it did once on 2026-11-09, after an upload hit a Cloudflare 504), the route isn't attached at the edge although the API says it is enabled: set `"workers_dev": false`, run `npx wrangler triggers deploy`, set it back to `true` and run it again.
+If the custom domain answers `error code: 1042` after a deploy (the workers.dev address did once on 2026-11-09, after an upload hit a Cloudflare 504), the route isn't attached at the edge although the API says it is set: run `npx wrangler triggers deploy` again.
 
 ## Local
 

@@ -82,7 +82,7 @@ Read this before changing product, design or workflow, and add every new decisio
 
 - **Address: `wren.n8builds.dev`** (owner, 2026-11-09), a Workers custom domain on the n8builds.dev zone.
   It is `PUBLIC_URL`, so Better Auth's base URL, trusted origin and email links use it.
-  The `workers.dev` address stays on and forwards there with a 308, keeping the path (`lib/security/canonical.ts`).
+  The `workers.dev` address and preview URLs are off (2026-11-11), so all traffic goes through the zone; `lib/security/canonical.ts` still redirects a workers.dev request if one ever arrives.
 
 - **Next.js 16 App Router on Cloudflare Workers through OpenNext**, the stack of the owner's other sites, Turbopack everywhere.
 - **One Durable Object agent per signed-in person** (Cloudflare Agents SDK, `agent/wren-agent.ts`), named by the verified user id.

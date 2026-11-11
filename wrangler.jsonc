@@ -95,9 +95,9 @@
   "secrets": { "required": ["BETTER_AUTH_SECRET"] },
   "observability": { "enabled": true, "head_sampling_rate": 1 },
   // wren.n8builds.dev as a Workers custom domain: Cloudflare creates and
-  // manages its DNS record and certificate. The workers.dev address stays on
-  // and forwards to it (worker/index.ts).
+  // manages its DNS record and certificate. The workers.dev address and
+  // version preview URLs are off, so all traffic goes through the zone.
   "routes": [{ "pattern": "wren.n8builds.dev", "custom_domain": true }],
-  "workers_dev": true,
+  "workers_dev": false,
   "preview_urls": false
 }

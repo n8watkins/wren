@@ -40,7 +40,7 @@ Settled: sign-in emails come from `wren@n8builds.dev`, and Wren lives at `wren.n
 - 2026-11-09: research engine and the Runs page (phase 3, lane B): runs in each person's agent, Tavily with Gemini Google Search as backup, safe fetching, cited reports.
 - 2026-11-09: release-kit and CI checks (#1); phase 1, foundation and chat (#4).
 - 2026-11-09: memory engine and the Memory page (lane A of phases 2 and 3): storage in each person's agent, search by meaning (Vectorize index and R2 bucket `wren-memory` created), files, the fact extractor (not yet called from chat), and the page.
-- 2026-11-09: preview deployed to https://wren.nathancwatkins23.workers.dev (D1 `wren` migrated, Durable Objects created, `BETTER_AUTH_SECRET` set). Email sign-in works there; chat needs a visitor's own key until the demo key is set.
+- 2026-11-09: preview deployed to the workers.dev address, since turned off (D1 `wren` migrated, Durable Objects created, `BETTER_AUTH_SECRET` set). Email sign-in works there; chat needs a visitor's own key until the demo key is set.
 
 ## Keys
 
