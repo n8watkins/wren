@@ -1,5 +1,6 @@
 'use client'
 
+import { useId, useState } from 'react'
 import type { Region } from '@/lib/region'
 import { Icon } from '../Icons'
 
@@ -12,6 +13,9 @@ import { Icon } from '../Icons'
  */
 export const DEMO_NOTICE =
   "This is a free demo running on Google Gemini's free tier. Please don't share personal details (names, contact info, health, finances, anything private) with the demo. For real use, add your own Gemini key."
+
+/** The one line a phone shows first; "More" opens DEMO_NOTICE under it. */
+const DEMO_NOTICE_SHORT = "Free demo. Don't share private info."
 
 /** The firmer line for visitors from the EEA, Switzerland and the UK. */
 export function regionNudge(region: Region): string | null {
@@ -31,19 +35,33 @@ export const MEMORY_REMINDER = "Free demo: don't save personal details (names, c
  */
 export function DemoNotice({ region, onKey, onDismiss }: { region: Region; onKey: () => void; onDismiss: () => void }) {
   const nudge = regionNudge(region)
+  const [open, setOpen] = useState(false)
+  const fullId = useId()
+  const cls = ['demo', nudge ? 'strong' : '', open ? 'open' : ''].filter(Boolean).join(' ')
   return (
-    <div className={nudge ? 'demo strong' : 'demo'} role="note" aria-label="Free demo" data-testid="demo-notice" data-region={nudge ? 'own-key' : undefined}>
+    <div className={cls} role="note" aria-label="Free demo" data-testid="demo-notice" data-region={nudge ? 'own-key' : undefined}>
       <Icon name="key" />
       <div className="dtext">
-        {nudge && (
-          <p className="dnudge" data-testid="demo-nudge">
-            {nudge}
+        {/* Phones only (globals.css): the short line and its "More"; the full text is hidden until it is open. */}
+        <div className="dbar">
+          <p className="dshort" data-testid="demo-short">
+            {DEMO_NOTICE_SHORT}
           </p>
-        )}
-        <p>{DEMO_NOTICE}</p>
-        <button type="button" className="btn pri" onClick={onKey} data-testid="demo-own-key">
-          Use your own key
-        </button>
+          <button type="button" className="dmore" aria-expanded={open} aria-controls={fullId} onClick={() => setOpen(!open)} data-testid="demo-more">
+            {open ? 'Less' : 'More'}
+          </button>
+        </div>
+        <div className="dfull" id={fullId} data-testid="demo-full">
+          {nudge && (
+            <p className="dnudge" data-testid="demo-nudge">
+              {nudge}
+            </p>
+          )}
+          <p>{DEMO_NOTICE}</p>
+          <button type="button" className="btn pri" onClick={onKey} data-testid="demo-own-key">
+            Use your own key
+          </button>
+        </div>
       </div>
       <button type="button" className="dismiss" onClick={onDismiss} aria-label="Dismiss the demo notice" data-testid="demo-dismiss">
         <Icon name="x" />
