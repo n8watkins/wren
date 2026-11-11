@@ -9,6 +9,7 @@
 import openNext from '../.open-next/worker.js'
 import { canonicalRedirect } from '../lib/security/canonical'
 import { buildContentSecurityPolicy, createNonce, staticSecurityHeaders } from '../lib/security/headers'
+import { healthCheck } from './health'
 import { VOICE_PATH, handleVoice } from './voice'
 import { runModelCheck } from '../agent/model-check'
 
@@ -22,6 +23,10 @@ interface OpenNextHandler {
 
 export default {
   async fetch(request, env, ctx): Promise<Response> {
+    // The uptime check (GET /healthz) answers before the redirect, Next.js, auth or the database.
+    const health = healthCheck(request)
+    if (health) return health
+
     const url = new URL(request.url)
     const https = url.protocol === 'https:'
 
