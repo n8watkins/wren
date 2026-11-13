@@ -15,7 +15,7 @@ export const DEMO_NOTICE =
   "This is a free demo running on Google Gemini's free tier. Please don't share personal details (names, contact info, health, finances, anything private) with the demo. For real use, add your own Gemini key."
 
 /** The one line a phone shows first; "More" opens DEMO_NOTICE under it. */
-const DEMO_NOTICE_SHORT = "Free demo. Don't share private info."
+const DEMO_NOTICE_SHORT = "Free demo. Nothing private."
 
 /** The firmer line for visitors from the EEA, Switzerland and the UK. */
 export function regionNudge(region: Region): string | null {
