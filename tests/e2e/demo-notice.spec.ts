@@ -33,7 +33,7 @@ test.describe('from anywhere else', () => {
     }
     const more = box.getByTestId('demo-more')
     const short = box.getByTestId('demo-short')
-    await expect(short).toHaveText("Free demo. Don't share private info.")
+    await expect(short).toHaveText("Free demo. Nothing private.")
     await expect(more).toHaveAttribute('aria-expanded', 'false')
     await expect(box.getByTestId('demo-full')).toBeHidden()
     // One line (no wrap, not cut off), and the tap targets are 44px.
