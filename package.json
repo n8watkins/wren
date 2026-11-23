@@ -26,11 +26,11 @@
     "release:check": "release-kit check && npm run lint && npm run type-check && npm run test:unit && npm run build:worker"
   },
   "dependencies": {
-    "@google/genai": "^3.0.0",
-    "@opennextjs/cloudflare": "1.20.16",
+    "@google/genai": "^3.6.1",
+    "@opennextjs/cloudflare": "1.20.18",
     "agents": "^0.33.0",
-    "better-auth": "^1.7.18",
-    "next": "16.4.5",
+    "better-auth": "^1.7.27",
+    "next": "16.4.6",
     "react": "19.3.1",
     "react-dom": "19.3.1",
     "react-markdown": "^10.1.0",
@@ -40,20 +40,20 @@
     "zod": "^4.6.7"
   },
   "devDependencies": {
-    "@playwright/test": "^1.65.0",
+    "@playwright/test": "^1.65.1",
     "@types/node": "^24.19.2",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "@types/ws": "^8.18.2",
     "@typescript/native": "npm:typescript@^7.0.2",
-    "eslint": "^10.14.0",
-    "eslint-config-next": "16.4.5",
-    "knip": "^6.44.2",
+    "eslint": "^10.15.0",
+    "eslint-config-next": "16.4.6",
+    "knip": "^6.47.0",
     "release-kit": "github:n8watkins/release-kit#v2.10.1",
     "typescript": "npm:@typescript/typescript6@^6.0.2",
-    "vitest": "^5.1.0",
-    "wrangler": "^4.158.0",
-    "ws": "^8.22.1"
+    "vitest": "^5.1.1",
+    "wrangler": "^4.165.0",
+    "ws": "^8.23.0"
   },
   "allowScripts": {
     "esbuild": true,
